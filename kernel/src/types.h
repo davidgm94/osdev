@@ -84,3 +84,7 @@ typedef struct SB
     u8 second:1;\
     u8 third:1;\
     u8 fourth:1
+
+#define ALIGN(bytes) __attribute__((aligned((bytes))))
+#define PACKED __attribute__((packed))
+#define INTERRUPT_HANDLER __attribute__((interrupt))

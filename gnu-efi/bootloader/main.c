@@ -202,7 +202,6 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
     Print(L"Kernel loaded\r\n");
 
-    void (*KernelStart)(Framebuffer*, PSF1Font*) = ((__attribute__((sysv_abi)) void(*)(Framebuffer*, PSF1Font*) ) header.e_entry);
 
     PSF1Font* font = LoadPSF1Font(NULL, L"zap-light16.psf", ImageHandle, SystemTable);
     if (!font)
@@ -230,8 +229,45 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
             fb->pixels_per_scanline
             );
 
+    EFI_MEMORY_DESCRIPTOR* Map = NULL;
+    UINTN MapSize, MapKey;
+    UINTN DescriptorSize;
+    UINT32 DescriptorVersion;
 
-    KernelStart(fb, font);
+    {
+        SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
+        SystemTable->BootServices->AllocatePool(EfiLoaderData, MapSize, (void**)&Map);
+        SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
+    }
+
+    typedef struct BooInfo
+    {
+        Framebuffer* framebuffer;
+        PSF1Font* font;
+        struct
+        {
+            EFI_MEMORY_DESCRIPTOR* handle;
+            UINTN size;
+            UINTN descriptor_size;
+        } mmap;
+    } BootInfo;
+
+    BootInfo boot_info =
+    {
+        .framebuffer = &framebuffer,
+        .font = font,
+        .mmap = 
+        {
+            .handle = Map,
+            .size = MapSize,
+            .descriptor_size = DescriptorSize,
+        },
+    };
+
+    void (*KernelStart)(BootInfo) = ((__attribute__((sysv_abi)) void(*)(BootInfo) ) header.e_entry);
+
+    SystemTable->BootServices->ExitBootServices(ImageHandle, MapKey);
+    KernelStart(boot_info);
 
 	return EFI_SUCCESS; // Exit the UEFI application
 }
