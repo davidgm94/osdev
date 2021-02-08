@@ -1,9 +1,9 @@
 #include "interrupts.h"
 #include "io.h"
 
-extern void panic(char*);
-extern void println(char*);
-extern void print(char*);
+extern void panic(const char*);
+extern void println(const char*);
+extern void print(const char*);
 extern void putc(char);
 extern void clear_char(void);
 extern const char* unsigned_to_string(u64);
@@ -55,6 +55,50 @@ INTERRUPT_HANDLER void keyboard_handler(struct InterruptFrame* frame)
     handle_keyboard(scancode);
 
     PIC_end_master();
+}
+
+u8 mouse_cycle = 0;
+u8 mouse_packet[4];
+bool mouse_packet_ready = false;
+
+void PS2_mouse_handle(u8 data)
+{
+    if (mouse_packet_ready)
+    {
+        return;
+    }
+
+    switch(mouse_cycle)
+    {
+        case 0:
+            if ((data & 0b00001000) != 0)
+            {
+                mouse_packet[0] = data;
+                mouse_cycle++;
+            }
+            break;
+        case 1:
+            mouse_packet[1] = data;
+            mouse_cycle++;
+            break;
+        case 2:
+            mouse_packet[2] = data;
+            mouse_packet_ready = true;
+            mouse_cycle = 0;
+            break;
+        default:
+            break;
+    }
+}
+
+INTERRUPT_HANDLER void mouse_handler(struct InterruptFrame* frame)
+{
+    u8 mouse_data = inb(0x60);
+
+    PS2_mouse_handle(mouse_data);
+    //print(unsigned_to_string(mouse_cycle));
+    
+    PIC_end_slave();
 }
 
 // Defined at the bottom of the file
@@ -290,3 +334,62 @@ const char ES_QWERTY_ASCII_table[] =
 };
 
 const char* ASCII_table = ES_QWERTY_ASCII_table;
+
+void PS2_mouse_wait(void)
+{
+    u64 timeout = 100000;
+    while (timeout--)
+    {
+        if ((inb(0x64) & 0b10) == 0)
+        {
+            return;
+        }
+    }
+}
+
+void PS2_mouse_wait_input(void)
+{
+    u64 timeout = 100000;
+    while (timeout--)
+    {
+        if (inb(0x64) & 0b1)
+        {
+            return;
+        }
+    }
+}
+
+void PS2_mouse_write(u8 value)
+{
+    PS2_mouse_wait();
+    outb(0x64, 0xD4);
+    PS2_mouse_wait();
+    outb(0x60, value);
+}
+
+u8 PS2_mouse_read(void)
+{
+    PS2_mouse_wait_input();
+    return inb(0x60);
+}
+
+void PS2_mouse_init(void)
+{
+    outb(0x64, 0xA8); // enabling the auxiliary device -mouse
+
+    PS2_mouse_wait();
+    outb(0x64, 0x20); // tells the keyboard controller that we want to send a command to the mouse
+    PS2_mouse_wait_input();
+    u8 status = inb(0x60);
+    status |= 0b10;
+    PS2_mouse_wait();
+    outb(0x64, 0x60);
+    PS2_mouse_wait();
+    outb(0x60, status); // setting the correct bit is the "compaq" status byte
+
+    PS2_mouse_write(0xF6);
+    PS2_mouse_read();
+
+    PS2_mouse_write(0xF4);
+    PS2_mouse_read();
+}

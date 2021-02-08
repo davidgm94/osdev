@@ -129,6 +129,16 @@ typedef enum PDEBit
 
 typedef u64 PageDirectoryEntry;
 
+static inline u64 abs(s64 value)
+{
+    if (value < 0)
+    {
+        value = -value;
+    }
+
+    return (u64)value;
+}
+
 void PDE_set_bit(PageDirectoryEntry* PDE, PDEBit bit, bool enabled)
 {
     u64 bit_mask = (u64)1 << bit;
@@ -247,6 +257,31 @@ static u64 reserved_memory;
 static u64 used_memory;
 static u64 last_page_map_index = 0;
 
+static Point mouse_position;
+static Point old_mouse_position;
+static u8 mouse_pointer[] =
+{
+    0b11111111, 0b11100000,
+    0b11111111, 0b10000000,
+    0b11111110, 0b00000000,
+    0b11111100, 0b00000000,
+    0b11111000, 0b00000000,
+    0b11110000, 0b00000000,
+    0b11100000, 0b00000000,
+    0b11000000, 0b00000000,
+    0b11000000, 0b00000000,
+    0b10000000, 0b00000000,
+    0b10000000, 0b00000000,
+    0b00000000, 0b00000000,
+    0b00000000, 0b00000000,
+    0b00000000, 0b00000000,
+    0b00000000, 0b00000000,
+    0b00000000, 0b00000000,
+};
+static u32 mouse_cursor_buffer[array_length(mouse_pointer) * array_length(mouse_pointer)];
+static u32 mouse_cursor_buffer_post_render[array_length(mouse_pointer) * array_length(mouse_pointer)];
+static bool mouse_never_drawn = true;
+
 extern void load_gdt(GDTDescriptor* gdt_descriptor);
 
 u8 get_bit(BitMap bm, u64 index)
@@ -312,16 +347,16 @@ void handle_newline_while_printing(Renderer* renderer)
     }
 }
 
-void render_char(Renderer* renderer, char c)
+void render_char(Renderer* renderer, char c, u32 xo, u32 yo)
 {
     u32* pix_writer = (u32*)renderer->fb->base_address;
     char* font_reader = renderer->font->glyph_buffer + (c * renderer->font->header->char_size);
 
-    for (u64 y = renderer->cursor_position.y; y < renderer->cursor_position.y + 16; y++, font_reader++)
+    for (u64 y = yo; y < yo + 16; y++, font_reader++)
     {
-        for (u64 x = renderer->cursor_position.x; x < renderer->cursor_position.x + 8; x++)
+        for (u64 x = xo; x < xo + 8; x++)
         {
-            if ((*font_reader & (0b10000000 >> (x - renderer->cursor_position.x))) > 0)
+            if ((*font_reader & (0b10000000 >> (x - xo))) > 0)
             {
                 *(u32*)(pix_writer + x + (y * renderer->fb->pixels_per_scanline)) = renderer->color;
             }
@@ -329,13 +364,13 @@ void render_char(Renderer* renderer, char c)
     }
 }
 
-void print_ex(Renderer* renderer, char* str)
+void print_ex(Renderer* renderer, const char* str)
 {
     if (str)
     {
         while (*str)
         {
-            render_char(renderer, *str);
+            render_char(renderer, *str, renderer->cursor_position.x, renderer->cursor_position.y);
             handle_newline_while_printing(renderer);
             str++;
         }
@@ -346,26 +381,43 @@ void print_ex(Renderer* renderer, char* str)
     }
 }
 
-
 void putc(char c)
 {
-    render_char(&renderer, c);
+    render_char(&renderer, c, renderer.cursor_position.x, renderer.cursor_position.y);
     handle_newline_while_printing(&renderer);
 }
 
-void print(char* str)
+void print(const char*);
+const char* unsigned_to_string(u64);
+
+void put_pixel(s64 x, s64 y, Color color)
+{
+    *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4)) = color;
+}
+
+u32 get_pixel(s64 x, s64 y)
+{
+    return *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4));
+}
+
+void put_char_in_point(char c, u32 xo, u32 yo)
+{
+    render_char(&renderer, c, xo, yo);
+}
+
+void print(const char* str)
 {
     print_ex(&renderer, str);
 }
 
 
-void println(char* str)
+void println(const char* str)
 {
     print(str);
     new_line();
 }
 
-char* unsigned_to_string(u64 value)
+const char* unsigned_to_string(u64 value)
 {
     u8 digit_count;
     u64 it = value;
@@ -393,7 +445,7 @@ char* unsigned_to_string(u64 value)
     return unsigned_to_string_output;
 }
 
-char* signed_to_string(s64 value)
+const char* signed_to_string(s64 value)
 {
     u8 is_negative = value < 0;
     if (is_negative)
@@ -428,7 +480,7 @@ char* signed_to_string(s64 value)
     return signed_to_string_output;
 }
 
-char* float_to_string(f64 value, u8 decimal_digits)
+const char* float_to_string(f64 value, u8 decimal_digits)
 {
     if (decimal_digits > 20)
     {
@@ -464,7 +516,7 @@ char* float_to_string(f64 value, u8 decimal_digits)
     return float_to_string_output;
 }
 
-char* hex_to_string(u64 value)
+const char* hex_to_string(u64 value)
 {
     u8 digits = sizeof(u64) * 2 - 1;
     
@@ -715,8 +767,7 @@ void read_EFI_mmap(EFIMmap mmap)
 
     BitMap_init(bitmap_size, largest_free_memory_segment);
 
-    // @TODO: shouldn't it be page_map.buffer instead?
-    lock_pages(&page_map, page_map.size / 4096 + 1);
+    lock_pages(page_map.buffer, page_map.size / 4096 + 1);
 
     for (u32 i = 0; i < mmap_entries; i++)
     {
@@ -853,37 +904,28 @@ u64 IDTDescriptor_get_offset(IDTDescriptor d)
     return offset;
 }
 
+void IDT_gate_new(void* handler, u8 entry_offset, u8 type_attribute, u8 selector)
+{
+    IDTDescriptor* i = (IDTDescriptor*)(idtr.offset + entry_offset * sizeof(IDTDescriptor));
+    IDTDescriptor_set_offset(i, (u64)handler);
+    i->type_attribute = type_attribute;
+    i->selector = selector;
+}
+
 void interrupts_setup(void)
 {
     idtr.limit = 0x0FFF;
     idtr.offset = (u64)request_page();
 
-    IDTDescriptor* int_page_fault = (IDTDescriptor*)(idtr.offset + 0xE * sizeof(IDTDescriptor));
-    IDTDescriptor_set_offset(int_page_fault, (u64)page_fault_handler);
-    int_page_fault->type_attribute = IDT_TA_InterruptGate;
-    int_page_fault->selector = 0x08;
-
-    IDTDescriptor* int_double_page_fault = (IDTDescriptor*)(idtr.offset + 0x8 * sizeof(IDTDescriptor));
-    IDTDescriptor_set_offset(int_double_page_fault, (u64)double_fault_handler);
-    int_double_page_fault->type_attribute = IDT_TA_InterruptGate;
-    int_double_page_fault->selector = 0x08;
-
-    IDTDescriptor* int_general_protection_fault = (IDTDescriptor*)(idtr.offset + 0xD * sizeof(IDTDescriptor));
-    IDTDescriptor_set_offset(int_general_protection_fault, (u64)general_protection_fault_handler);
-    int_general_protection_fault->type_attribute = IDT_TA_InterruptGate;
-    int_general_protection_fault->selector = 0x08;
-
-    IDTDescriptor* int_keyboard_handler = (IDTDescriptor*)(idtr.offset + 0x21 * sizeof(IDTDescriptor));
-    IDTDescriptor_set_offset(int_keyboard_handler, (u64)keyboard_handler);
-    int_keyboard_handler->type_attribute = IDT_TA_InterruptGate;
-    int_keyboard_handler->selector = 0x08;
+    IDT_gate_new(page_fault_handler, 0xE, IDT_TA_InterruptGate, 0x08);
+    IDT_gate_new(double_fault_handler, 0x8, IDT_TA_InterruptGate, 0x08);
+    IDT_gate_new(general_protection_fault_handler, 0xD, IDT_TA_InterruptGate, 0x08);
+    IDT_gate_new(keyboard_handler, 0x21, IDT_TA_InterruptGate, 0x08);
+    IDT_gate_new(mouse_handler, 0x2C, IDT_TA_InterruptGate, 0x08);
 
     asm("lidt %0" : : "m" (idtr));
 
     PIC_remap();
-
-    outb(PIC1_DATA, 0b11111101);
-    outb(PIC2_DATA, 0b11111111);
 
     asm("sti");
 }
@@ -949,13 +991,190 @@ void kernel_init(BootInfo boot_info)
     fb_clear();
     interrupts_setup();
 
+    PS2_mouse_init();
+
+    outb(PIC1_DATA, 0b11111001);
+    outb(PIC2_DATA, 0b11101111);
+
     println("Hello UEFI x86_64 kernel!");
     print_memory_usage();
+}
+
+void clear_mouse_cursor(u8* mouse_cursor, Point position)
+{
+    if (mouse_never_drawn)
+    {
+        return;
+    }
+
+    s64 x_max = 16;
+    s64 y_max = 16;
+    s64 difference_x = renderer.fb->width - position.x;
+    s64 difference_y = renderer.fb->height - position.y;
+
+    if (difference_x < 16)
+    {
+        x_max = difference_x;
+    }
+
+    if (difference_y < 16)
+    {
+        y_max = difference_y;
+    }
+
+    for (s64 y = 0; y < y_max; y++)
+    {
+        for (s64 x = 0; x < x_max; x++)
+        {
+            s64 bit = y * 16 + x;
+            s64 byte = bit / 8;
+            if ((mouse_cursor[byte] & (0b10000000 >> (x % 8))) && (get_pixel(position.x + x, position.y + y) == mouse_cursor_buffer_post_render[x + y * 16]))
+            {
+                put_pixel(position.x + x, position.y + y, mouse_cursor_buffer[x + y * 16]);
+            }
+        }
+    }
+}
+
+void draw_overlay_mouse_cursor(u8* mouse_cursor, Point position, Color color)
+{
+    s64 x_max = 16;
+    s64 y_max = 16;
+    s64 difference_x = renderer.fb->width - position.x;
+    s64 difference_y = renderer.fb->height - position.y;
+
+    if (difference_x < 16)
+    {
+        x_max = difference_x;
+    }
+
+    if (difference_y < 16)
+    {
+        y_max = difference_y;
+    }
+
+    for (s64 y = 0; y < y_max; y++)
+    {
+        for (s64 x = 0; x < x_max; x++)
+        {
+            s64 bit = y * 16 + x;
+            s64 byte = bit / 8;
+            if (mouse_cursor[byte] & (0b10000000 >> (x % 8)))
+            {
+                mouse_cursor_buffer[x + y * 16] = get_pixel(position.x + x, position.y + y);
+                put_pixel(position.x + x, position.y + y, color);
+                mouse_cursor_buffer_post_render[x + y * 16] = get_pixel(position.x + x, position.y + y);
+            }
+        }
+    }
+
+    mouse_never_drawn = false;
+}
+
+
+void PS2_mouse_process_packet(void)
+{
+    if (mouse_packet_ready)
+    {
+        mouse_packet_ready = false;
+
+        bool x_neg = mouse_packet[0] & PS2XSign;
+        bool y_neg = mouse_packet[0] & PS2YSign;
+        bool x_overflow = mouse_packet[0] & PS2XOverflow;
+        bool y_overflow = mouse_packet[0] & PS2YOverflow;
+
+        if (!x_neg)
+        {
+            mouse_position.x += mouse_packet[1];
+            if (x_overflow)
+            {
+                mouse_position.x += 255;
+            }
+        }
+        else
+        {
+            mouse_packet[1] = 256 - mouse_packet[1];
+            mouse_position.x -= mouse_packet[1];
+            if (x_overflow)
+            {
+                mouse_position.x -= 255;
+            }
+        }
+        
+        if (!y_neg)
+        {
+            mouse_position.y -= mouse_packet[2];
+            if (y_overflow)
+            {
+                mouse_position.y -= 255;
+            }
+        }
+        else
+        {
+            mouse_packet[2] = 256 - mouse_packet[2];
+            mouse_position.y += mouse_packet[2];
+            if (y_overflow)
+            {
+                mouse_position.y += 255;
+            }
+        }
+
+        if (mouse_position.x < 0)
+        {
+            mouse_position.x = 0;
+        }
+
+        if (mouse_position.x > renderer.fb->width - 1)
+        {
+            mouse_position.x = renderer.fb->width - 1;
+        }
+
+        if (mouse_position.y < 0)
+        {
+            mouse_position.y = 0;
+        }
+
+        if (mouse_position.y > renderer.fb->height - 1)
+        {
+            mouse_position.y = renderer.fb->height - 1;
+        }
+
+        clear_mouse_cursor(mouse_pointer, old_mouse_position);
+        draw_overlay_mouse_cursor(mouse_pointer, mouse_position, Color_White);
+
+        if (mouse_packet[0] & PS2LeftButton)
+        {
+            print("[");
+            print(unsigned_to_string(mouse_position.x));
+            print(",");
+            print(unsigned_to_string(mouse_position.y));
+            print("], ");
+        }
+        
+        if (mouse_packet[0] & PS2MiddleButton)
+        {
+
+        }
+
+        if (mouse_packet[0] & PS2RightButton)
+        {
+            Color color = renderer.color;
+            renderer.color = Color_Blue;
+            put_char_in_point('a', mouse_position.x, mouse_position.y);
+            renderer.color = color;
+        }
+
+        mouse_packet_ready = false;
+        old_mouse_position = mouse_position;
+    }
 }
 
 void _start(BootInfo boot_info)
 {
     kernel_init(boot_info);
 
-    for(;;);
+    while (true)
+    {
+        PS2_mouse_process_packet();
+    }
 }
