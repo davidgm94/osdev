@@ -28,7 +28,7 @@ kernel: $(OBJS) link
 
 $(OBJDIR)/interrupts.o: $(SRCDIR)/interrupts.c
 	@mkdir -p $(@D)
-	$(CC) -mno-red-zone -mgeneral-regs-only -ffreestanding -c $^ -o $@
+	$(CC) -mgeneral-regs-only -c $^ -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)

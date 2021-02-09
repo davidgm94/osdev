@@ -328,6 +328,18 @@ void memset(void* address, u8 value, u64 bytes)
     }
 }
 
+void* memcpy(void* dst, const void* src, usize bytes)
+{
+    u8* writer = dst;
+    u8* reader = (u8*)src;
+    for (u64 i = 0; i < bytes; i++)
+    {
+        *writer++ = *reader++;
+    }
+
+    return dst;
+}
+
 void new_line_ex(Renderer* renderer)
 {
     renderer->cursor_position = (Point) { .x = 0, .y = renderer->cursor_position.y + 16 };
