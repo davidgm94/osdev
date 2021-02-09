@@ -39,16 +39,20 @@ EFI_FILE* LoadFile(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle, EF
 
 	EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
 	SystemTable->BootServices->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (void**)&LoadedImage);
+    Print(L"Image loaded\n");
 
 	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* FileSystem;
 	SystemTable->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (void**)&FileSystem);
+    Print(L"Protocol handled\n");
 
 	if (Directory == NULL)
     {
 		FileSystem->OpenVolume(FileSystem, &Directory);
 	}
+    Print(L"Directory open\n");
 
 	EFI_STATUS s = Directory->Open(Directory, &LoadedFile, Path, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+    Print(L"File open called\n");
 	if (s != EFI_SUCCESS)
     {
 		return NULL;
@@ -131,7 +135,6 @@ PSF1Font* LoadPSF1Font(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle
 #define CHECK_KERNEL_FORMAT(cause, message) if (cause) { Print(L"Bad kernel format. Cause: "); Print(message); Print(L"\r\n"); return EFI_LOAD_ERROR; }
 EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	InitializeLib(ImageHandle, SystemTable);
-	Print(L"String blah blah blah \n\r");
 
 	EFI_FILE* Kernel = LoadFile(NULL, L"kernel.elf", ImageHandle, SystemTable);
 	if (Kernel == NULL)

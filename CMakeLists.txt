@@ -6,9 +6,9 @@ enable_language(ASM_NASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_AUTOGEN_VERBOSE ON)
-set(CMAKE_C_COMPILER clang)
+set(CMAKE_C_COMPILER gcc)
 set(CMAKE_LINKER ld)
-set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_LINKER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
+set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_LINKER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES> /usr/lib/gcc/x86_64-pc-linux-gnu/10.2.0/libgcc.a")
 set(CMAKE_STATIC_LINKER_FLAGS rDv)
 set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> <LINK_FLAGS> <TARGET> <OBJECTS>")
 set(ARCH x86_64)
@@ -124,3 +124,7 @@ set(NSH_SCRIPT ${KERNEL_DIR}/startup.nsh)
 set(FONT_FILE ${KERNEL_DIR}/zap-light16.psf)
 
 add_custom_target(image ALL COMMAND dd if=/dev/zero of=${PROJECT_NAME}.img bs=512 count=93750 && mformat -i ${PROJECT_NAME}.img -f 1440 :: && mmd -i ${PROJECT_NAME}.img ::/EFI && mmd -i ${PROJECT_NAME}.img ::/EFI/BOOT && mcopy -i ${PROJECT_NAME}.img main.efi ::/EFI/BOOT && mcopy -i ${PROJECT_NAME}.img ${NSH_SCRIPT} :: && mcopy -i ${PROJECT_NAME}.img kernel.elf :: && mcopy -i ${PROJECT_NAME}.img ${FONT_FILE} :: DEPENDS main.efi kernel.elf)
+
+add_custom_target(run
+    COMMAND qemu-system-x86_64 -drive file=${PROJECT_NAME}.img -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="${OVMF_DIR}/OVMF_CODE-pure-efi.fd",readonly=on -drive if=pflash,format=raw,unit=1,file="${OVMF_DIR}/OVMF_VARS-pure-efi.fd" -net none
+    DEPENDS image)
