@@ -130,40 +130,6 @@ typedef enum PDEBit
 
 typedef u64 PageDirectoryEntry;
 
-static inline u64 abs(s64 value)
-{
-    if (value < 0)
-    {
-        value = -value;
-    }
-
-    return (u64)value;
-}
-
-void PDE_set_bit(PageDirectoryEntry* PDE, PDEBit bit, bool enabled)
-{
-    u64 bit_mask = (u64)1 << bit;
-    *PDE &= ~bit_mask;
-    *PDE |= bit_mask * enabled;
-}
-
-bool PDE_get_bit(PageDirectoryEntry PDE, PDEBit bit)
-{
-    u64 bit_mask = (u64)1 << bit;
-    return PDE & bit_mask;
-}
-u64 PDE_get_address(PageDirectoryEntry PDE)
-{
-    return (PDE & 0x000ffffffffff000) >> 12;
-}
-
-void PDE_set_address(PageDirectoryEntry* PDE, u64 address)
-{
-    address &= 0x000000ffffffffff;
-    *PDE &= 0xfff0000000000fff;
-    *PDE |= address << 12;
-}
-
 typedef struct ALIGN(0x1000) PageTable 
 {
     PageDirectoryEntry entries[512];
@@ -233,13 +199,38 @@ typedef struct PACKED TerminalCommandBuffer
     s16 char_count;
 } TerminalCommandBuffer;
 
+typedef char CommandArg[96];
+
+typedef struct Command
+{
+    CommandArg name;
+    CommandArg args[9];
+} Command;
+
+typedef enum FormatLookupTableIndex
+{
+    BINARY = 0,
+    DECIMAL = 1,
+    HEXADECIMAL = 2,
+} FormatLookupTableIndex;
+
+typedef void KernelCommandFn(Command* cmd);
+
+typedef struct KernelCommand
+{
+    const char* name;
+    KernelCommandFn* dispatcher;
+    u8 min_args;
+    u8 max_args;
+} KernelCommand;
+
 extern u64 _KernelStart;
 extern u64 _KernelEnd;
 static u64 kernel_size;
 static u64 kernel_page_count;
 
 
-ALIGN(0x1000) static GDT default_GDT = 
+static ALIGN(0x1000) GDT default_GDT = 
 {
     .kernel_null = { 0, 0, 0, 0x00, 0x00, 0 },
     .kernel_code = { 0, 0, 0, 0x9a, 0xa0, 0 },
@@ -289,11 +280,119 @@ static u32 mouse_cursor_buffer[array_length(mouse_pointer) * array_length(mouse_
 static u32 mouse_cursor_buffer_post_render[array_length(mouse_pointer) * array_length(mouse_pointer)];
 static bool mouse_never_drawn = true;
 
-static TerminalCommandBuffer cmd_buffer;
+static TerminalCommandBuffer cmd_buffer[8];
+static u8 current_command = 0;
 static bool allow_keyboard_input = true;
+static bool left_shift_pressed = false;
+static bool right_shift_pressed = false;
 
+static char hex_lookup_table[255] =
+{
+    ['0'] = 0,
+    ['1'] = 1,
+    ['2'] = 2,
+    ['3'] = 3,
+    ['4'] = 4,
+    ['5'] = 5,
+    ['6'] = 6,
+    ['7'] = 7,
+    ['8'] = 8,
+    ['9'] = 9,
+    ['a'] = 0xa,
+    ['b'] = 0xb,
+    ['c'] = 0xc,
+    ['d'] = 0xd,
+    ['e'] = 0xe,
+    ['f'] = 0xf,
+    ['A'] = 0xA,
+    ['B'] = 0xB,
+    ['C'] = 0xC,
+    ['D'] = 0xD,
+    ['E'] = 0xE,
+    ['F'] = 0xF,
+};
+
+static char decimal_lookup_table[255] =
+{
+    ['0'] = 0,
+    ['1'] = 1,
+    ['2'] = 2,
+    ['3'] = 3,
+    ['4'] = 4,
+    ['5'] = 5,
+    ['6'] = 6,
+    ['7'] = 7,
+    ['8'] = 8,
+    ['9'] = 9,
+};
+
+static char binary_lookup_table[255] =
+{
+    ['0'] = 0,
+    ['1'] = 1,
+};
+
+static const char* format_lookup_table[] =
+{
+    [BINARY] = binary_lookup_table,
+    [DECIMAL] = decimal_lookup_table,
+    [HEXADECIMAL] = hex_lookup_table
+};
+
+static const u64 format_values_per_digit[] = 
+{
+    [BINARY] = 2,
+    [DECIMAL] = 10,
+    [HEXADECIMAL] = 16,
+};
+
+void cmd_memdump(Command* cmd);
+static const KernelCommand kernel_commands[] =
+{
+    [0] =
+    {
+        .name = "memdump",
+        .dispatcher = cmd_memdump,
+        .min_args = 2,
+        .max_args = 2,
+    },
+};
 
 extern void load_gdt(GDTDescriptor* gdt_descriptor);
+
+static inline u64 abs(s64 value)
+{
+    if (value < 0)
+    {
+        value = -value;
+    }
+
+    return (u64)value;
+}
+
+void PDE_set_bit(PageDirectoryEntry* PDE, PDEBit bit, bool enabled)
+{
+    u64 bit_mask = (u64)1 << bit;
+    *PDE &= ~bit_mask;
+    *PDE |= bit_mask * enabled;
+}
+
+bool PDE_get_bit(PageDirectoryEntry PDE, PDEBit bit)
+{
+    u64 bit_mask = (u64)1 << bit;
+    return PDE & bit_mask;
+}
+u64 PDE_get_address(PageDirectoryEntry PDE)
+{
+    return (PDE & 0x000ffffffffff000) >> 12;
+}
+
+void PDE_set_address(PageDirectoryEntry* PDE, u64 address)
+{
+    address &= 0x000000ffffffffff;
+    *PDE &= 0xfff0000000000fff;
+    *PDE |= address << 12;
+}
 
 u8 get_bit(BitMap bm, u64 index)
 {
@@ -450,9 +549,9 @@ const char* float_to_string(f64 value, u8 decimal_digits)
     return float_to_string_output;
 }
 
-const char* hex_to_string(u64 value)
+const char* hex_to_string_bytes(u64 value, u8 bytes_to_print)
 {
-    u8 digits = sizeof(u64) * 2 - 1;
+    u8 digits = bytes_to_print * 2 - 1;
     
     for (u8 i = 0; i < digits; i++)
     {
@@ -469,7 +568,49 @@ const char* hex_to_string(u64 value)
 
     return hex_to_string_output;
 }
+
+const char* hex_to_string(u64 value)
+{
+    u8 bytes_to_print;
+    if (value <= UINT8_MAX)
+    {
+        bytes_to_print = sizeof(u8);
+    }
+    else if (value <= UINT16_MAX)
+    {
+        bytes_to_print = sizeof(u16);
+    }
+    else if (value <= UINT32_MAX)
+    {
+        bytes_to_print = sizeof(u32);
+    }
+    else if (value <= UINT64_MAX)
+    {
+        bytes_to_print = sizeof(u64);
+    }
+
+    return hex_to_string_bytes(value, bytes_to_print);
+}
+
+const char* hex_to_string_u8(u8 value)
+{
+    return hex_to_string_bytes(value, sizeof(u8));
+}
+const char* hex_to_string_u16(u16 value)
+{
+    return hex_to_string_bytes(value, sizeof(u16));
+}
+const char* hex_to_string_u32(u32 value)
+{
+    return hex_to_string_bytes(value, sizeof(u32));
+}
+const char* hex_to_string_u64(u64 value)
+{
+    return hex_to_string_bytes(value, sizeof(u64));
+}
+
 void print(const char*);
+
 void scroll(Renderer* renderer)
 {
     Framebuffer* fb = renderer->fb;
@@ -1137,121 +1278,135 @@ void draw_overlay_mouse_cursor(u8* mouse_cursor, Point position, Color color)
 
 void PS2_mouse_process_packet(void)
 {
-    if (mouse_packet_ready)
+    if (!mouse_packet_ready)
     {
-        mouse_packet_ready = false;
-
-        bool x_neg = mouse_packet[0] & PS2XSign;
-        bool y_neg = mouse_packet[0] & PS2YSign;
-        bool x_overflow = mouse_packet[0] & PS2XOverflow;
-        bool y_overflow = mouse_packet[0] & PS2YOverflow;
-
-        if (!x_neg)
-        {
-            mouse_position.x += mouse_packet[1];
-            if (x_overflow)
-            {
-                mouse_position.x += 255;
-            }
-        }
-        else
-        {
-            mouse_packet[1] = 256 - mouse_packet[1];
-            mouse_position.x -= mouse_packet[1];
-            if (x_overflow)
-            {
-                mouse_position.x -= 255;
-            }
-        }
-        
-        if (!y_neg)
-        {
-            mouse_position.y -= mouse_packet[2];
-            if (y_overflow)
-            {
-                mouse_position.y -= 255;
-            }
-        }
-        else
-        {
-            mouse_packet[2] = 256 - mouse_packet[2];
-            mouse_position.y += mouse_packet[2];
-            if (y_overflow)
-            {
-                mouse_position.y += 255;
-            }
-        }
-
-        if (mouse_position.x < 0)
-        {
-            mouse_position.x = 0;
-        }
-
-        if (mouse_position.x > renderer.fb->width - 1)
-        {
-            mouse_position.x = renderer.fb->width - 1;
-        }
-
-        if (mouse_position.y < 0)
-        {
-            mouse_position.y = 0;
-        }
-
-        if (mouse_position.y > renderer.fb->height - 1)
-        {
-            mouse_position.y = renderer.fb->height - 1;
-        }
-
-        clear_mouse_cursor(mouse_pointer, old_mouse_position);
-        draw_overlay_mouse_cursor(mouse_pointer, mouse_position, Color_White);
-
-        if (mouse_packet[0] & PS2LeftButton)
-        {
-#if 0
-            print("[");
-            print(unsigned_to_string(renderer.cursor_position.x));
-            print(",");
-            print(unsigned_to_string(renderer.cursor_position.y));
-            println("], ");
-#else
-            allow_keyboard_input = !allow_keyboard_input;
-#endif
-        }
-        
-        if (mouse_packet[0] & PS2MiddleButton)
-        {
-
-        }
-
-        if (mouse_packet[0] & PS2RightButton)
-        {
-#if 0
-            Color color = renderer.color;
-            renderer.color = Color_Blue;
-            put_char_in_point('a', mouse_position.x, mouse_position.y);
-            renderer.color = color;
-#else
-            scroll(&renderer);
-#endif
-        }
-
-        mouse_packet_ready = false;
-        old_mouse_position = mouse_position;
+        return;
     }
+
+    mouse_packet_ready = false;
+
+    bool x_neg = mouse_packet[0] & PS2XSign;
+    bool y_neg = mouse_packet[0] & PS2YSign;
+    bool x_overflow = mouse_packet[0] & PS2XOverflow;
+    bool y_overflow = mouse_packet[0] & PS2YOverflow;
+
+    if (!x_neg)
+    {
+        mouse_position.x += mouse_packet[1];
+        if (x_overflow)
+        {
+            mouse_position.x += 255;
+        }
+    }
+    else
+    {
+        mouse_packet[1] = 256 - mouse_packet[1];
+        mouse_position.x -= mouse_packet[1];
+        if (x_overflow)
+        {
+            mouse_position.x -= 255;
+        }
+    }
+
+    if (!y_neg)
+    {
+        mouse_position.y -= mouse_packet[2];
+        if (y_overflow)
+        {
+            mouse_position.y -= 255;
+        }
+    }
+    else
+    {
+        mouse_packet[2] = 256 - mouse_packet[2];
+        mouse_position.y += mouse_packet[2];
+        if (y_overflow)
+        {
+            mouse_position.y += 255;
+        }
+    }
+
+    if (mouse_position.x < 0)
+    {
+        mouse_position.x = 0;
+    }
+
+    if (mouse_position.x > renderer.fb->width - 1)
+    {
+        mouse_position.x = renderer.fb->width - 1;
+    }
+
+    if (mouse_position.y < 0)
+    {
+        mouse_position.y = 0;
+    }
+
+    if (mouse_position.y > renderer.fb->height - 1)
+    {
+        mouse_position.y = renderer.fb->height - 1;
+    }
+
+    clear_mouse_cursor(mouse_pointer, old_mouse_position);
+    draw_overlay_mouse_cursor(mouse_pointer, mouse_position, Color_White);
+
+    if (mouse_packet[0] & PS2LeftButton)
+    {
+#if 0
+        print("[");
+        print(unsigned_to_string(renderer.cursor_position.x));
+        print(",");
+        print(unsigned_to_string(renderer.cursor_position.y));
+        println("], ");
+#else
+        allow_keyboard_input = !allow_keyboard_input;
+#endif
+    }
+
+    if (mouse_packet[0] & PS2MiddleButton)
+    {
+
+    }
+
+    if (mouse_packet[0] & PS2RightButton)
+    {
+#if 0
+        Color color = renderer.color;
+        renderer.color = Color_Blue;
+        put_char_in_point('a', mouse_position.x, mouse_position.y);
+        renderer.color = color;
+#else
+        scroll(&renderer);
+#endif
+    }
+
+    mouse_packet_ready = false;
+    old_mouse_position = mouse_position;
 }
 
 void reset_terminal(void)
 {
-    cmd_buffer.char_count = 0;
+    // If the command is empty, we do not need to record it
+    if (cmd_buffer[current_command].char_count)
+    {
+        if (current_command <= array_length(cmd_buffer))
+        {
+            current_command++;
+        }
+        else
+        {
+            memcpy(cmd_buffer, cmd_buffer + 1, sizeof(cmd_buffer) - sizeof(TerminalCommandBuffer));
+        }
 
+        cmd_buffer[current_command].char_count = 0;
+    }
+
+    new_line();
     allow_keyboard_input = true;
     print("> ");
 }
 
 void kb_input_process(void)
 {
-    static bool left_shift_pressed = false;
-    static bool right_shift_pressed = false;
 
     KeyboardBuffer kb_buffer;
     u16 kb_event_count;
@@ -1288,11 +1443,13 @@ void kb_input_process(void)
             case Key_Enter:
                 new_line();
                 allow_keyboard_input = false;
-                cmd_buffer.characters[cmd_buffer.char_count] = 0;
                 return;
             case Key_Backspace:
-                clear_char();
-                cmd_buffer.char_count--;
+                if (cmd_buffer[current_command].char_count)
+                {
+                    clear_char();
+                    cmd_buffer[current_command].char_count--;
+                }
                 break;
             default:
             {
@@ -1301,7 +1458,7 @@ void kb_input_process(void)
                 {
                     putc(ch);
 
-                    bool overflow = cmd_buffer.char_count + 1 > array_length(cmd_buffer.characters);
+                    bool overflow = cmd_buffer[current_command].char_count + 1 > array_length(cmd_buffer[current_command].characters);
                     if (overflow)
                     {
                         println("Command buffer overflow");
@@ -1309,7 +1466,7 @@ void kb_input_process(void)
                         return;
                     }
 
-                    cmd_buffer.characters[cmd_buffer.char_count++] = ch;
+                    cmd_buffer[current_command].characters[cmd_buffer[current_command].char_count++] = ch;
                 }
             }
         }
@@ -1379,23 +1536,130 @@ usize strlen(const char* s)
     return it - s;
 }
 
+bool string_eq(const char* a, const char* b)
+{
+    return strcmp(a, b) == 0;
+}
+
+Command parse_command(char* raw_buffer)
+{
+    Command cmd = {0};
+    char* it = raw_buffer;
+
+    while (*it && *it != ' ')
+    {
+        cmd.name[it - raw_buffer] = *it;
+        it++;
+    }
+    cmd.name[it - raw_buffer] = 0;
+
+    for (u32 i = 0; *it; i++)
+    {
+        // Skip spaces
+        while (*it && *it == ' ')
+        {
+            it++;
+        }
+
+        u32 c;
+        for (c = 0; *it && *it != ' '; c++, it++)
+        {
+            cmd.args[i][c] = *it;
+        }
+        cmd.args[i][c] = 0;
+    }
+
+    return cmd;
+}
+
+// Reverse copy the string (including the null-terminated character
+void reverse(char* dst, const char* src, usize bytes)
+{
+    for (u32 i = 0; i < bytes; i++)
+    {
+        dst[i] = src[bytes - i - 1];
+    }
+    dst[bytes] = 0;
+}
+
+u64 string_to_unsigned(const char* str)
+{
+    FormatLookupTableIndex table_index = DECIMAL;
+    usize len = strlen(str);
+    char* it = (char*) str;
+
+    if (it[0] == '0' && it[1] == 'x')
+    {
+        table_index = HEXADECIMAL;
+        len -= 2;
+        it += 2;
+    }
+    else if (it[0] == '0' && it[1] == 'b')
+    {
+        table_index = BINARY;
+        len -= 2;
+        it += 2;
+    }
+
+    const char* lookup_table = format_lookup_table[table_index];
+    u64 values_per_digit = format_values_per_digit[table_index];
+
+    char copy[65];
+    reverse(copy, it, len);
+
+    u64 result = 0;
+    u64 byte_multiplier = 1;
+
+    for (u32 i = 0; i < len; i++, byte_multiplier *= values_per_digit)
+    {
+        u64 lookup_value = lookup_table[copy[i]];
+        u64 mul = lookup_value * byte_multiplier;
+        result += mul;
+    }
+
+    return result;
+}
+
+void cmd_memdump(Command* cmd)
+{
+    u64 mem = string_to_unsigned(cmd->args[0]);
+    u64 bytes = string_to_unsigned(cmd->args[1]);
+
+    u8* it = (u8*)mem;
+
+    u8 divide_every = 4;
+
+    for (u64 i = 0; i < bytes; i++)
+    {
+        u8* ptr = it + i;
+        print(hex_to_string((u64)ptr));
+        print(": ");
+        print(hex_to_string(*ptr));
+        bool end_of_line = ((i > 0 && i % divide_every == 0) || i == bytes - 1);
+        if (end_of_line)
+        {
+            new_line();
+        }
+        else
+        {
+            print(" | ");
+        }
+    }
+}
+
 void process_command(void)
 {
-    char* b = cmd_buffer.characters;
-    if (strcmp("hello", b) == 0)
+    Command cmd = parse_command(cmd_buffer[current_command].characters);
+    for (u32 i = 0; i < array_length(kernel_commands); i++)
     {
-        println("Matched command");
+        if (string_eq(kernel_commands[i].name, cmd.name))
+        {
+            kernel_commands[i].dispatcher(&cmd);
+            return;
+        }
     }
-    else if (strncmp("echo ", b, strlen("echo ")) == 0)
-    {
-        char buffer[1024];
-        strcpy(buffer, b + 5);
-        println(buffer);
-    }
-    else
-    {
-        println("Unknown command");
-    }
+
+    println("Unknown command");
 }
 
 void _start(BootInfo boot_info)
