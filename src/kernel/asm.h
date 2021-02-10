@@ -16,3 +16,15 @@ static inline void io_wait(void)
     asm volatile("outb %%al, $0x80" : : "a"(0));
 }
 
+static inline void hlt(void)
+{
+    asm volatile("hlt");
+}
+
+static inline void loop_forever(void)
+{
+    for(;;)
+    {
+        hlt();
+    }
+}

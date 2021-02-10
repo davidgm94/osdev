@@ -1,5 +1,5 @@
 #include "interrupts.h"
-#include "io.h"
+#include "asm.h"
 
 extern void panic(const char*);
 extern void println(const char*);
@@ -8,15 +8,6 @@ extern void putc(char);
 extern void clear_char(void);
 extern const char* unsigned_to_string(u64);
 extern const char* hex_to_string(u64);
-
-enum
-{
-    LeftShift = 0x2A,
-    RightShift = 0x36,
-    Enter = 0x1C,
-    Backspace = 0x0E,
-    Space = 0x39
-};
 
 void handle_keyboard(u8 scancode);
 
@@ -29,6 +20,39 @@ void PIC_end_master(void);
 void PIC_end_slave(void);
 void PIC_remap(void);
 
+typedef struct KeyboardBitmap
+{
+    u64 values;
+} KeyboardBitmap;
+
+static KeyboardBitmap keymap = {0};
+
+static inline bool KeyboardBitmap_get_value(KeyboardBitmap keymap, u64 index)
+{
+    if (index < 64)
+    {
+        return (keymap.values & index) >> index;
+    }
+
+    print("Wrong value for key: ");
+    println(unsigned_to_string(index));
+    loop_forever();
+    return false;
+}
+
+static inline void KeyboardBitmap_set_value(KeyboardBitmap* keymap, u64 index, bool enabled)
+{
+    if (index < 64)
+    {
+        u64 bit_mask = (u64)1 << index;
+        keymap->values &= ~bit_mask;
+        keymap->values |= bit_mask * enabled;
+    }
+
+    /*print("Wrong value for key: ");*/
+    /*println(unsigned_to_string(index));*/
+    /*loop_forever();*/
+}
 
 INTERRUPT_HANDLER void page_fault_handler(struct InterruptFrame* frame)
 {
@@ -48,11 +72,32 @@ INTERRUPT_HANDLER void general_protection_fault_handler(struct InterruptFrame* f
     for(;;);
 }
 
+static void key_release(u8 scancode);
+static void key_press(u8 scancode);
+
+
+KeyboardBuffer kb_buffer;
+u16 kb_event_count;
+bool overflow = false;
+
+bool kb_get_buffer(KeyboardBuffer* out_kb_buffer, u16* out_kb_event_count)
+{
+    *out_kb_buffer = kb_buffer;
+    *out_kb_event_count = kb_event_count;
+    kb_buffer = (const KeyboardBuffer){0};
+    kb_event_count = 0;
+    return overflow;
+}
+
 INTERRUPT_HANDLER void keyboard_handler(struct InterruptFrame* frame)
 {
     u8 scancode = inb(PS2_KEYBOARD_PORT);
 
-    handle_keyboard(scancode);
+    if (kb_event_count == UINT8_MAX)
+    {
+        overflow = true;
+    }
+    kb_buffer.messages[kb_event_count++] = scancode;
 
     PIC_end_master();
 }
@@ -108,60 +153,26 @@ extern const char* ASCII_table;
 
 char translate_scancode(u8 scancode, bool uppercase)
 {
-    if (scancode > 58)
-    {
-        return 0;
-    }
+    return (ASCII_table[scancode] - (uppercase * 32)) * (scancode <= 58);
+}
 
-    if  (uppercase)
-    {
-        return ASCII_table[scancode] - 32;
-    }
-    else
-    {
-        return ASCII_table[scancode];
-    }
+static void key_press(u8 scancode)
+{
+    KeyboardBitmap_set_value(&keymap, scancode, true);
+}
 
+static void key_release(u8 scancode)
+{
+    KeyboardBitmap_set_value(&keymap, scancode, false);
+}
+
+bool is_key_pressed(u8 scancode)
+{
+    return KeyboardBitmap_get_value(keymap, scancode);
 }
 
 void handle_keyboard(u8 scancode)
 {
-    static bool is_left_shift_pressed = false;
-    static bool is_right_shift_pressed = false;
-
-    switch (scancode)
-    {
-        case LeftShift:
-            is_left_shift_pressed = true;
-            return;
-        case LeftShift + 0x80:
-            is_left_shift_pressed = false;
-            return;
-        case RightShift:
-            is_right_shift_pressed = true;
-            return;
-        case RightShift + 0x80:
-            is_right_shift_pressed = false;
-            return;
-        case Enter:
-            println("");
-            return;
-        case Space:
-            putc(' ');
-            return;
-        case Backspace:
-            clear_char();
-            return;
-        default:
-            break;
-    }
-
-    char ch = translate_scancode(scancode, is_left_shift_pressed | is_right_shift_pressed);
-
-    if (ch)
-    {
-        putc(ch);
-    }
 }
 
 void PIC_end_master(void)
@@ -270,6 +281,7 @@ const char US_QWERTY_ASCII_table[] =
     ' ', 
 };
 
+
 const char ES_QWERTY_ASCII_table[] =
 {
     0,      // 00
@@ -285,9 +297,9 @@ const char ES_QWERTY_ASCII_table[] =
     '9',    // 10
     '0',    // 11
     '\'',    // 12
-    '=',    // 13 @tricky
-    0,      // 14 @tricky
-    0,      // 15 @tricky
+    '=',    // 13 // @tricky
+    0,      // 14 // @tricky
+    0,      // 15 // @tricky
     'q',    // 16
     'w',    // 17
     'e',    // 18
@@ -298,7 +310,7 @@ const char ES_QWERTY_ASCII_table[] =
     'i',    // 23
     'o',    // 24
     'p',    // 25
-    '[',    // 26 @tricky
+    '[',    // 26 // @tricky
     '+',    // 27
     0,      // 28
     0,      // 29
@@ -311,8 +323,8 @@ const char ES_QWERTY_ASCII_table[] =
     'j',    // 36
     'k',    // 37
     'l',    // 38
-    'n',    // 39 @tricky = ñ
-    0,      // 40 @tricky = ´
+    'n',    // 39 // @tricky
+    0,      // 40 // @tricky
     '\'',   // 41 
     '`',    // 42
     '<',    // 43
@@ -326,7 +338,7 @@ const char ES_QWERTY_ASCII_table[] =
     ',',    // 51
     '.',    // 52
     '-',    // 53
-    '/',    // 54 @tricky
+    '/',    // 54 // @tricky
     0,      // 55
     '*',    // 56
     ' ',      // 57

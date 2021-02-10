@@ -1,23 +1,24 @@
 #include "types.h"
-#include "io.h"
+#include "asm.h"
 #include "interrupts.h"
+
+u64 i = 0;
 
 typedef struct Framebuffer
 {
     void* base_address;
-    usize size;
-    u32 width, height;
+    usize size; u32 width, height;
     u32 pixels_per_scanline;
 } Framebuffer;
 
 // @TODO: first bit can cause problems, check out
 typedef enum Color
 {
-    Color_Black = 0xff000000,
-    Color_Red = 0x00ff0000,
-    Color_Green = 0x0000ff00,
-    Color_Blue = 0x000000ff,
-    Color_White = Color_Blue | Color_Green | Color_Red,
+    Color_Black     = 0xff000000,
+    Color_Red       = 0x00ff0000,
+    Color_Green     = 0x0000ff00,
+    Color_Blue      = 0x000000ff,
+    Color_White     = Color_Blue | Color_Green | Color_Red,
 } Color;
 
 typedef struct PSF1Header
@@ -226,6 +227,12 @@ enum
     IDT_TA_TrapGate = 0b10001111,
 };
 
+typedef struct PACKED TerminalCommandBuffer
+{
+    char characters[1022];
+    s16 char_count;
+} TerminalCommandBuffer;
+
 extern u64 _KernelStart;
 extern u64 _KernelEnd;
 static u64 kernel_size;
@@ -281,6 +288,10 @@ static u8 mouse_pointer[] =
 static u32 mouse_cursor_buffer[array_length(mouse_pointer) * array_length(mouse_pointer)];
 static u32 mouse_cursor_buffer_post_render[array_length(mouse_pointer) * array_length(mouse_pointer)];
 static bool mouse_never_drawn = true;
+
+static TerminalCommandBuffer cmd_buffer;
+static bool allow_keyboard_input = true;
+
 
 extern void load_gdt(GDTDescriptor* gdt_descriptor);
 
@@ -338,95 +349,6 @@ void* memcpy(void* dst, const void* src, usize bytes)
     }
 
     return dst;
-}
-
-void new_line_ex(Renderer* renderer)
-{
-    renderer->cursor_position = (Point) { .x = 0, .y = renderer->cursor_position.y + 16 };
-}
-
-void new_line(void)
-{
-    new_line_ex(&renderer);
-}
-
-void handle_newline_while_printing(Renderer* renderer)
-{
-    renderer->cursor_position.x += 8;
-    if (renderer->cursor_position.x + 8 > renderer->fb->width)
-    {
-        new_line_ex(renderer);
-    }
-}
-
-void render_char(Renderer* renderer, char c, u32 xo, u32 yo)
-{
-    u32* pix_writer = (u32*)renderer->fb->base_address;
-    char* font_reader = renderer->font->glyph_buffer + (c * renderer->font->header->char_size);
-
-    for (u64 y = yo; y < yo + 16; y++, font_reader++)
-    {
-        for (u64 x = xo; x < xo + 8; x++)
-        {
-            if ((*font_reader & (0b10000000 >> (x - xo))) > 0)
-            {
-                *(u32*)(pix_writer + x + (y * renderer->fb->pixels_per_scanline)) = renderer->color;
-            }
-        }
-    }
-}
-
-void print_ex(Renderer* renderer, const char* str)
-{
-    if (str)
-    {
-        while (*str)
-        {
-            render_char(renderer, *str, renderer->cursor_position.x, renderer->cursor_position.y);
-            handle_newline_while_printing(renderer);
-            str++;
-        }
-    }
-    else
-    {
-        print_ex(renderer, "(null)");
-    }
-}
-
-void putc(char c)
-{
-    render_char(&renderer, c, renderer.cursor_position.x, renderer.cursor_position.y);
-    handle_newline_while_printing(&renderer);
-}
-
-void print(const char*);
-const char* unsigned_to_string(u64);
-
-void put_pixel(s64 x, s64 y, Color color)
-{
-    *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4)) = color;
-}
-
-u32 get_pixel(s64 x, s64 y)
-{
-    return *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4));
-}
-
-void put_char_in_point(char c, u32 xo, u32 yo)
-{
-    render_char(&renderer, c, xo, yo);
-}
-
-void print(const char* str)
-{
-    print_ex(&renderer, str);
-}
-
-
-void println(const char* str)
-{
-    print(str);
-    new_line();
 }
 
 const char* unsigned_to_string(u64 value)
@@ -547,12 +469,140 @@ const char* hex_to_string(u64 value)
 
     return hex_to_string_output;
 }
+void print(const char*);
+void scroll(Renderer* renderer)
+{
+    Framebuffer* fb = renderer->fb;
+
+    u64 fb_base = (u64)fb->base_address;
+    u64 bytes_per_scanline = fb->pixels_per_scanline * sizeof(Color);
+    u64 fb_height = fb->height;
+    u64 fb_size = fb->size;
+
+    u8 char_size = renderer->font->header->char_size;
+    u64 lines_to_be_skipped = char_size;
+    u64 lines_to_be_copied = fb_height - lines_to_be_skipped;
+    memcpy((void*)fb_base, (void*)(fb_base + (bytes_per_scanline * lines_to_be_skipped)), bytes_per_scanline * lines_to_be_copied);
+
+    u32* line_clear_it = (u32*)(fb_base + (bytes_per_scanline * lines_to_be_copied));
+    u32* top = (u32*)(fb_base + (bytes_per_scanline * fb_height));
+    Color clear_color = renderer->clear_color;
+
+    while (line_clear_it < top)
+    {
+        *line_clear_it++ = clear_color;
+    }
+
+    // Don't advance line, we are scrolling
+    renderer->cursor_position.x = 0;
+}
+
+void new_line_ex(Renderer* renderer)
+{
+    u8 char_size = renderer->font->header->char_size;
+    usize fb_height = renderer->fb->height;
+    u32 space_to_obviate = char_size + (fb_height % char_size);
+    u32 line_limit = fb_height - space_to_obviate;
+
+    if (renderer->cursor_position.y + char_size < line_limit)
+    {
+        renderer->cursor_position = (Point) { .x = 0, .y = renderer->cursor_position.y + char_size };
+    }
+    else
+    {
+        scroll(renderer);
+    }
+}
+
+void new_line(void)
+{
+    new_line_ex(&renderer);
+}
+
+void handle_newline_while_printing(Renderer* renderer)
+{
+    renderer->cursor_position.x += 8;
+    if (renderer->cursor_position.x + 8 > renderer->fb->width)
+    {
+        new_line_ex(renderer);
+    }
+}
+
+void render_char(Renderer* renderer, char c, u32 xo, u32 yo)
+{
+    u32* pix_writer = (u32*)renderer->fb->base_address;
+    char* font_reader = renderer->font->glyph_buffer + (c * renderer->font->header->char_size);
+
+    for (u64 y = yo; y < yo + 16; y++, font_reader++)
+    {
+        for (u64 x = xo; x < xo + 8; x++)
+        {
+            if ((*font_reader & (0b10000000 >> (x - xo))) > 0)
+            {
+                *(u32*)(pix_writer + x + (y * renderer->fb->pixels_per_scanline)) = renderer->color;
+            }
+        }
+    }
+}
+
+void print_ex(Renderer* renderer, const char* str)
+{
+    if (str)
+    {
+        while (*str)
+        {
+            render_char(renderer, *str, renderer->cursor_position.x, renderer->cursor_position.y);
+            handle_newline_while_printing(renderer);
+            str++;
+        }
+    }
+    else
+    {
+        print_ex(renderer, "(null)");
+    }
+}
+
+void putc(char c)
+{
+    render_char(&renderer, c, renderer.cursor_position.x, renderer.cursor_position.y);
+    handle_newline_while_printing(&renderer);
+}
+
+const char* unsigned_to_string(u64);
+
+void put_pixel(s64 x, s64 y, Color color)
+{
+    *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4)) = color;
+}
+
+u32 get_pixel(s64 x, s64 y)
+{
+    return *(u32*)( (u64)renderer.fb->base_address + (x*4) + (y * renderer.fb->pixels_per_scanline * 4));
+}
+
+void put_char_in_point(char c, u32 xo, u32 yo)
+{
+    render_char(&renderer, c, xo, yo);
+}
+
+void print(const char* str)
+{
+    print_ex(&renderer, str);
+}
+
+
+void println(const char* str)
+{
+    print(str);
+    new_line();
+}
+
 
 void fb_clear(void)
 {
     Framebuffer* fb = renderer.fb;
     u64 fb_base = (u64)fb->base_address;
-    u64 bytes_per_scanline = fb->pixels_per_scanline * 4;
+    u64 bytes_per_scanline = fb->pixels_per_scanline * sizeof(Color);
     u64 fb_height = fb->height;
     u64 fb_size = fb->size;
 
@@ -560,12 +610,14 @@ void fb_clear(void)
     {
         u64 pix_base_ptr = fb_base + (bytes_per_scanline * vertical_scanline);
         u32* top_ptr = (u32*)(pix_base_ptr + bytes_per_scanline);
+
         for (u32* pix_ptr = (u32*)pix_base_ptr; pix_ptr < top_ptr; pix_ptr++)
         {
             *pix_ptr = renderer.clear_color;
         }
     }
 }
+
 
 void clear_char(void)
 {
@@ -1083,7 +1135,6 @@ void draw_overlay_mouse_cursor(u8* mouse_cursor, Point position, Color color)
     mouse_never_drawn = false;
 }
 
-
 void PS2_mouse_process_packet(void)
 {
     if (mouse_packet_ready)
@@ -1156,11 +1207,15 @@ void PS2_mouse_process_packet(void)
 
         if (mouse_packet[0] & PS2LeftButton)
         {
+#if 0
             print("[");
-            print(unsigned_to_string(mouse_position.x));
+            print(unsigned_to_string(renderer.cursor_position.x));
             print(",");
-            print(unsigned_to_string(mouse_position.y));
-            print("], ");
+            print(unsigned_to_string(renderer.cursor_position.y));
+            println("], ");
+#else
+            allow_keyboard_input = !allow_keyboard_input;
+#endif
         }
         
         if (mouse_packet[0] & PS2MiddleButton)
@@ -1170,10 +1225,14 @@ void PS2_mouse_process_packet(void)
 
         if (mouse_packet[0] & PS2RightButton)
         {
+#if 0
             Color color = renderer.color;
             renderer.color = Color_Blue;
             put_char_in_point('a', mouse_position.x, mouse_position.y);
             renderer.color = color;
+#else
+            scroll(&renderer);
+#endif
         }
 
         mouse_packet_ready = false;
@@ -1181,12 +1240,181 @@ void PS2_mouse_process_packet(void)
     }
 }
 
+void reset_terminal(void)
+{
+    cmd_buffer.char_count = 0;
+
+    allow_keyboard_input = true;
+    print("> ");
+}
+
+void kb_input_process(void)
+{
+    static bool left_shift_pressed = false;
+    static bool right_shift_pressed = false;
+
+    KeyboardBuffer kb_buffer;
+    u16 kb_event_count;
+    // This cleans kb interrupt buffer
+    bool overflow = kb_get_buffer(&kb_buffer, &kb_event_count);
+    if (overflow)
+    {
+        println("KEYBOARD BUFFER OVERFLOW");
+        while(1);
+    }
+
+    if (!allow_keyboard_input)
+    {
+        return;
+    }
+
+    for (u16 i = 0; i < kb_event_count; i++)
+    {
+        u8 scancode = kb_buffer.messages[i];
+        switch (scancode)
+        {
+            case Key_LeftShift:
+                left_shift_pressed = true;
+                break;
+            case Key_LeftShift + 0x80:
+                left_shift_pressed = false;
+                break;
+            case Key_RightShift:
+                right_shift_pressed = true;
+                break;
+            case Key_RightShift + 0x80:
+                right_shift_pressed = false;
+                break;
+            case Key_Enter:
+                new_line();
+                allow_keyboard_input = false;
+                cmd_buffer.characters[cmd_buffer.char_count] = 0;
+                return;
+            case Key_Backspace:
+                clear_char();
+                cmd_buffer.char_count--;
+                break;
+            default:
+            {
+                char ch = translate_scancode(scancode, left_shift_pressed || right_shift_pressed);
+                if (ch)
+                {
+                    putc(ch);
+
+                    bool overflow = cmd_buffer.char_count + 1 > array_length(cmd_buffer.characters);
+                    if (overflow)
+                    {
+                        println("Command buffer overflow");
+                        reset_terminal();
+                        return;
+                    }
+
+                    cmd_buffer.characters[cmd_buffer.char_count++] = ch;
+                }
+            }
+        }
+    }
+}
+
+char* strcpy(char* dst, const char* src)
+{
+    if (src && dst)
+    {
+        char* src_it = (char*)src;
+        char* dst_it = dst;
+        while (*src_it)
+        {
+            *dst_it++ = *src_it++;
+        }
+        *dst_it = *src_it;
+    }
+
+    return dst;
+}
+
+s32 strcmp(const char* lhs, const char* rhs)
+{
+    char* lit = (char*)lhs;
+    char* rit = (char*)rhs;
+
+    while (*lit == *rit)
+    {
+        if (*lit == 0)
+        {
+            return 0;
+        }
+        lit++;
+        rit++;
+    }
+
+    return *lit - *rit;
+}
+
+s32 strncmp(const char* lhs, const char* rhs, usize count)
+{
+    char* lit = (char*)lhs;
+    char* rit = (char*)rhs;
+    bool eq;
+
+    for (usize i = 0; i < count && (eq = *lit == *rit); i++, lit++, rit++)
+    {
+        if (*lit == 0)
+        {
+            return 0;
+        }
+    }
+
+    return (*lit - *rit) * (!eq);
+}
+
+usize strlen(const char* s)
+{
+    char* it = (char*)s;
+
+    while (*it)
+    {
+        it++;
+    }
+
+    return it - s;
+}
+
+void process_command(void)
+{
+    char* b = cmd_buffer.characters;
+    if (strcmp("hello", b) == 0)
+    {
+        println("Matched command");
+    }
+    else if (strncmp("echo ", b, strlen("echo ")) == 0)
+    {
+        char buffer[1024];
+        strcpy(buffer, b + 5);
+        println(buffer);
+    }
+    else
+    {
+        println("Unknown command");
+    }
+}
+
 void _start(BootInfo boot_info)
 {
     kernel_init(boot_info);
 
+    reset_terminal();
+
     while (true)
     {
         PS2_mouse_process_packet();
+        kb_input_process();
+        // This means we should process a command
+        if (!allow_keyboard_input)
+        {
+            process_command();
+            reset_terminal();
+        }
+
+        hlt();
     }
 }
