@@ -64,11 +64,49 @@ typedef struct EFIMmap
     u64 descriptor_size;
 } EFIMmap;
 
+typedef struct PACKED ACPI_RSDPDescriptor
+{
+    char signature[8];
+    u8 checksum;
+    char OEM_ID[6];
+    u8 revision;
+    u32 RSDT_address;
+} ACPI_RSDPDescriptor;
+
+typedef struct PACKED ACPI_SDTHeader
+{
+    char signature[8];
+    u32 length;
+    u8 revision;
+    u8 checksum;
+    u8 OEM_ID[6];
+    u8 OEM_table_ID[8];
+    u32 OEM_revision;
+    u32 creator_ID;
+    u32 creator_revision;
+} ACPI_SDTHeader;
+
+typedef struct PACKED ACPI_MCFGHeader
+{
+    ACPI_SDTHeader header;
+    u64 reserved;
+} ACPI_MCFGHeader;
+
+typedef struct PACKED ACPI_RSDPDescriptor2
+{
+    ACPI_RSDPDescriptor first;
+    u32 length;
+    u64 XSDT_address;
+    u8 extended_checksum;
+    u8 reserved[3];
+} ACPI_RSDPDescriptor2;
+
 typedef struct BooInfo
 {
     Framebuffer* framebuffer;
     PSF1Font* font;
     EFIMmap mmap;
+    ACPI_RSDPDescriptor2* rsdp;
 } BootInfo;
 
 typedef enum EFIMemoryType
@@ -224,6 +262,7 @@ typedef struct KernelCommand
     u8 max_args;
 } KernelCommand;
 
+
 extern u64 _KernelStart;
 extern u64 _KernelEnd;
 static u64 kernel_size;
@@ -347,6 +386,7 @@ static const u64 format_values_per_digit[] =
 };
 
 void cmd_memdump(Command* cmd);
+void cmd_ls(Command* cmd);
 static const KernelCommand kernel_commands[] =
 {
     [0] =
@@ -355,6 +395,13 @@ static const KernelCommand kernel_commands[] =
         .dispatcher = cmd_memdump,
         .min_args = 2,
         .max_args = 2,
+    },
+    [1] = 
+    {
+        .name = "ls",
+        .dispatcher = cmd_ls,
+        .min_args = 0,
+        .max_args = 255,
     },
 };
 
@@ -1178,6 +1225,8 @@ void panic(char* message)
     println(message);
 }
 
+void reset_terminal(void);
+void ACPI_setup(BootInfo boot_info);
 void kernel_init(BootInfo boot_info)
 {
     load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
@@ -1198,11 +1247,16 @@ void kernel_init(BootInfo boot_info)
 
     PS2_mouse_init();
 
+    ACPI_setup(boot_info);
+
     outb(PIC1_DATA, 0b11111001);
     outb(PIC2_DATA, 0b11101111);
 
     println("Hello UEFI x86_64 kernel!");
     print_memory_usage();
+    //println(hex_to_string((u64)boot_info.rsdp));
+
+    reset_terminal();
 }
 
 void clear_mouse_cursor(u8* mouse_cursor, Point position)
@@ -1620,6 +1674,11 @@ u64 string_to_unsigned(const char* str)
     return result;
 }
 
+void cmd_ls(Command* cmd)
+{
+    println("Filesystem is not implemented yet");
+}
+
 void cmd_memdump(Command* cmd)
 {
     u64 mem = string_to_unsigned(cmd->args[0]);
@@ -1662,11 +1721,29 @@ void process_command(void)
     println("Unknown command");
 }
 
+void ACPI_setup(BootInfo boot_info)
+{
+    ACPI_SDTHeader* xsdt = (ACPI_SDTHeader*)boot_info.rsdp->XSDT_address;
+
+    s32 entries = (xsdt->length - sizeof(ACPI_SDTHeader) / 8);
+
+    for (s32 i = 0; i < entries; i++)
+    {
+        ACPI_SDTHeader* sdt_header = (ACPI_SDTHeader*)*(u64*)((u64)xsdt + sizeof(ACPI_SDTHeader) + (i * 8));
+
+        for (s32 i = 0; i < 4; i++)
+        {
+            putc(sdt_header->signature[i]);
+        }
+        putc(' ');
+    }
+    new_line();
+}
+
 void _start(BootInfo boot_info)
 {
     kernel_init(boot_info);
 
-    reset_terminal();
 
     while (true)
     {

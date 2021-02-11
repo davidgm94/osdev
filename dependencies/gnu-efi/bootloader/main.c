@@ -258,13 +258,19 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
     EFI_CONFIGURATION_TABLE* config_table = SystemTable->ConfigurationTable;
     void* rsdp = NULL;
-    EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
+    //EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
 
     for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
     {
         if (CompareGuid(&config_table[i].VendorGuid, &AcpiTableGuid))
         {
+            if (strequal((CHAR8*)"RSD PTR ", (CHAR8*)config_table->VendorTable, 8))
+            {
+                rsdp = (void*) config_table->VendorTable;
+                // break;
+            }
         }
+        config_table++;
     }
 
     typedef struct BooInfo
@@ -290,6 +296,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
             .size = MapSize,
             .descriptor_size = DescriptorSize,
         },
+        .rsdp = rsdp,
     };
 
     void (*KernelStart)(BootInfo) = ((__attribute__((sysv_abi)) void(*)(BootInfo) ) header.e_entry);
