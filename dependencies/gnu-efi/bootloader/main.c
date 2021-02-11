@@ -132,7 +132,7 @@ PSF1Font* LoadPSF1Font(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle
     return result;
 }
 
-UINTN strequal(CHAR8* a, CHARB* b, UINTN length)
+UINTN strequal(CHAR8* a, CHAR8* b, UINTN length)
 {
     for (UINTN i = 0; i < length && *a == *b; i++)
     {
@@ -262,7 +262,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
     for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
     {
-        if (CompareGuid(&config_table[index].VendorGuid, &AcpiTableGuid))
+        if (CompareGuid(&config_table[i].VendorGuid, &AcpiTableGuid))
         {
         }
     }
