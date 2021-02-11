@@ -134,7 +134,7 @@ PSF1Font* LoadPSF1Font(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle
 
 UINTN strequal(CHAR8* a, CHAR8* b, UINTN length)
 {
-    for (UINTN i = 0; i < length && *a == *b; i++)
+    for (UINTN i = 0; i < length; i++)
     {
         if (*a != *b)
         {
@@ -258,20 +258,27 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
     EFI_CONFIGURATION_TABLE* config_table = SystemTable->ConfigurationTable;
     void* rsdp = NULL;
-    //EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
+    EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
+
+    UINTN counter = 0;
 
     for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
     {
-        if (CompareGuid(&config_table[i].VendorGuid, &AcpiTableGuid))
+        if (CompareGuid(&config_table[i].VendorGuid, &Acpi2TableGuid))
         {
             if (strequal((CHAR8*)"RSD PTR ", (CHAR8*)config_table->VendorTable, 8))
             {
                 rsdp = (void*) config_table->VendorTable;
-                // break;
+                // TODO: Weird bug
+                counter++;
+                //break;
             }
         }
         config_table++;
     }
+
+    // TODO: Weird bug: found the rsdp two times
+    Print(L"Found RSDP %u times\r\n", counter);
 
     typedef struct BooInfo
     {

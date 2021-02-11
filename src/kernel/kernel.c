@@ -64,23 +64,14 @@ typedef struct EFIMmap
     u64 descriptor_size;
 } EFIMmap;
 
-typedef struct PACKED ACPI_RSDPDescriptor
-{
-    char signature[8];
-    u8 checksum;
-    char OEM_ID[6];
-    u8 revision;
-    u32 RSDT_address;
-} ACPI_RSDPDescriptor;
-
 typedef struct PACKED ACPI_SDTHeader
 {
-    char signature[8];
+    char signature[4];
     u32 length;
     u8 revision;
     u8 checksum;
-    u8 OEM_ID[6];
-    u8 OEM_table_ID[8];
+    char OEM_ID[6];
+    char OEM_table_ID[8];
     u32 OEM_revision;
     u32 creator_ID;
     u32 creator_revision;
@@ -92,16 +83,50 @@ typedef struct PACKED ACPI_MCFGHeader
     u64 reserved;
 } ACPI_MCFGHeader;
 
+typedef struct PACKED ACPI_RSDPDescriptor1
+{
+    char signature[8];
+    u8 checksum;
+    char OEM_ID[6];
+    u8 revision;
+    u32 RSDT_address;
+} ACPI_RSDPDescriptor1;
+
 typedef struct PACKED ACPI_RSDPDescriptor2
 {
-    ACPI_RSDPDescriptor first;
+    ACPI_RSDPDescriptor1 descriptor1;
     u32 length;
     u64 XSDT_address;
     u8 extended_checksum;
     u8 reserved[3];
 } ACPI_RSDPDescriptor2;
 
-typedef struct BooInfo
+typedef struct PACKED ACPI_DeviceConfig
+{
+    u64 base_address;
+    u16 PCI_seg_group;
+    u8 start_bus;
+    u8 end_bus;
+    u32 reserved;
+} ACPI_DeviceConfig;
+
+typedef struct PACKED PCI_DeviceHeader
+{
+    u16 vendor_ID;
+    u16 device_ID;
+    u16 command;
+    u16 status;
+    u8 revision_ID;
+    u8 program_interface;
+    u8 subclass;
+    u8 class;
+    u8 cache_line_size;
+    u8 latency_timer;
+    u8 header_type;
+    u8 BIST;
+} PCI_DeviceHeader;
+
+typedef struct BootInfo
 {
     Framebuffer* framebuffer;
     PSF1Font* font;
@@ -288,6 +313,7 @@ static char unsigned_to_string_output[128];
 static char float_to_string_output[128];
 static char hex_to_string_output[128];
 
+static PageTable* PML4; 
 static BitMap page_map;
 static u64 free_memory;
 static u64 reserved_memory;
@@ -485,6 +511,20 @@ void memset(void* address, u8 value, u64 bytes)
     }
 }
 
+bool memequal(const void* a, const void* b, usize bytes)
+{
+    u8* a1 = (u8*)a;
+    u8* b1 = (u8*)b;
+    for (usize i = 0; i < bytes; i++)
+    {
+        if (a1[i] != b1[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void* memcpy(void* dst, const void* src, usize bytes)
 {
     u8* writer = dst;
@@ -605,13 +645,14 @@ const char* hex_to_string_bytes(u64 value, u8 bytes_to_print)
         u8* ptr = ((u8*)&value + i);
 
         u8 tmp = ((*ptr & 0xF0) >> 4);
-        hex_to_string_output[digits - (i * 2 + 1)] = tmp + (tmp > 9 ? 55 : '0');
+        hex_to_string_output[(digits - (i * 2 + 1))] = tmp + (tmp > 9 ? 55 : '0');
 
         tmp = (*ptr) & 0x0F;
-        hex_to_string_output[digits - (i * 2)] = tmp + (tmp > 9 ? 55 : '0');
+        hex_to_string_output[(digits - (i * 2))] = tmp + (tmp > 9 ? 55 : '0');
     }
 
-    hex_to_string_output[digits + 1] = 0;
+    hex_to_string_output[(digits + 1)] = 0;
+
 
     return hex_to_string_output;
 }
@@ -1058,10 +1099,10 @@ void print_memory_usage(void)
     print(unsigned_to_string(get_reserved_RAM() / 1024));
     print(" KB");
     new_line();
-    print("Kernel start address: 0x");
+    print("Kernel start address: ");
     print(hex_to_string(_KernelStart));
     new_line();
-    print("Kernel end address:   0x");
+    print("Kernel end address:   ");
     print(hex_to_string(_KernelEnd));
     new_line();
     print("Kernel size: ");
@@ -1070,7 +1111,7 @@ void print_memory_usage(void)
     new_line();
 }
 
-void memmap(PageTable* PML4, void* virtual_memory, void* physical_memory)
+void memmap(void* virtual_memory, void* physical_memory)
 {
     PageMapIndexer pmi;
     {
@@ -1191,14 +1232,14 @@ void memory_setup(BootInfo boot_info)
     lock_pages(&_KernelStart, kernel_page_count);
 
 
-    PageTable* PML4 = (PageTable*)request_page();
+    PML4 = (PageTable*)request_page();
     memset(PML4, 0, 0x1000);
 
     u64 memsize = get_memory_size(boot_info.mmap);
 
     for (u64 i = 0; i < memsize; i += 0x1000)
     {
-        memmap(PML4, (void*)i, (void*)i);
+        memmap((void*)i, (void*)i);
     }
 
     u64 fb_base_address = (u64)renderer.fb->base_address;
@@ -1208,7 +1249,7 @@ void memory_setup(BootInfo boot_info)
 
     for (u64 i = fb_base_address; i < fb_base_address + fb_size; i += 0x1000)
     {
-        memmap(PML4, (void*)i, (void*)i);
+        memmap((void*)i, (void*)i);
     }
 
     asm volatile("mov %0, %%cr3" : : "r" (PML4));
@@ -1721,24 +1762,140 @@ void process_command(void)
     println("Unknown command");
 }
 
-void ACPI_setup(BootInfo boot_info)
+ACPI_SDTHeader* ACPI_find_table(ACPI_SDTHeader* xsdt_header, const char* table_signature)
 {
-    ACPI_SDTHeader* xsdt = (ACPI_SDTHeader*)boot_info.rsdp->XSDT_address;
+    u32 table_count = (xsdt_header->length - sizeof(ACPI_SDTHeader)) / 8;
+    // Point to the end of the header (the beginning of the tables
+    u64* pointer_table = (u64*)(xsdt_header + 1);
 
-    s32 entries = (xsdt->length - sizeof(ACPI_SDTHeader) / 8);
-
-    for (s32 i = 0; i < entries; i++)
+    for (u32 i = 0; i < table_count; i++)
     {
-        ACPI_SDTHeader* sdt_header = (ACPI_SDTHeader*)*(u64*)((u64)xsdt + sizeof(ACPI_SDTHeader) + (i * 8));
-
-        for (s32 i = 0; i < 4; i++)
+        ACPI_SDTHeader* table_header = (ACPI_SDTHeader*) pointer_table[i];
+        if (memequal(table_header->signature, table_signature, sizeof(table_header->signature)))
         {
-            putc(sdt_header->signature[i]);
+            return table_header;
         }
-        putc(' ');
     }
+
+    return NULL;
+}
+
+void PCI_enumerate_function(u64 device_address, u64 function)
+{
+    u64 offset = function << 12;
+    u64 function_address = device_address + offset;
+
+    memmap((void*)function_address, (void*)function_address);
+
+    PCI_DeviceHeader* pci_device_header = (PCI_DeviceHeader*)function_address;
+    if (pci_device_header->device_ID == 0 || pci_device_header->device_ID == 0xffff)
+    {
+        return;
+    }
+
+    print(hex_to_string(pci_device_header->device_ID));
+    print(" ");
+    println(hex_to_string(pci_device_header->vendor_ID));
+}
+
+void PCI_enumerate_device(u64 bus_address, u64 device)
+{
+    u64 offset = device << 15;
+    u64 device_address = bus_address + offset;
+
+    memmap((void*)device_address, (void*)device_address);
+
+    PCI_DeviceHeader* pci_device_header = (PCI_DeviceHeader*)device_address;
+    if (pci_device_header->device_ID == 0 || pci_device_header->device_ID == 0xffff)
+    {
+        return;
+    }
+
+    for (u64 function = 0; function < 8; function++)
+    {
+        PCI_enumerate_function(device_address, function);
+    }
+}
+
+void PCI_enumerate_bus(u64 base_address, u64 bus)
+{
+    u64 offset = bus << 20;
+    u64 bus_address = base_address + offset;
+
+    memmap((void*)bus_address, (void*)bus_address);
+
+    PCI_DeviceHeader* pci_device_header = (PCI_DeviceHeader*)bus_address;
+    if (pci_device_header->device_ID == 0 || pci_device_header->device_ID == 0xffff)
+    {
+        return;
+    }
+
+#define PCI_DEVICE_COUNT_PER_BUS 32
+    for (u64 device = 0; device < PCI_DEVICE_COUNT_PER_BUS; device++)
+    {
+        PCI_enumerate_device(bus_address, device);
+    }
+}
+
+void PCI_enumerate(ACPI_MCFGHeader* mcfg_header)
+{
+    new_line();
+
+    u32 mcfg_entries = (mcfg_header->header.length - sizeof(ACPI_MCFGHeader)) / sizeof(ACPI_DeviceConfig);
+    print("MCFG entries: ");
+    println(unsigned_to_string(mcfg_entries));
+
+    ACPI_DeviceConfig* device_config_array = (ACPI_DeviceConfig*)(mcfg_header + 1);
+    memmap(device_config_array, device_config_array);
+
+    for (u32 i = 0; i < mcfg_entries; i++)
+    {
+        ACPI_DeviceConfig* device_cfg = (ACPI_DeviceConfig*)&device_config_array[i];
+        memmap(device_cfg, device_cfg);
+
+        for (u64 bus = device_cfg->start_bus; bus < device_cfg->end_bus; bus++)
+        {
+            PCI_enumerate_bus(device_cfg->base_address, bus);
+        }
+    }
+
     new_line();
 }
+
+void ACPI_setup(BootInfo boot_info)
+{
+    print("ACPI version: ");
+    println(unsigned_to_string(boot_info.rsdp->descriptor1.revision));
+
+    ACPI_SDTHeader* xsdt_header = (ACPI_SDTHeader*)boot_info.rsdp->XSDT_address;
+
+    u8 sum = 0;
+    for (u32 i = 0; i < xsdt_header->length; i++)
+    {
+        sum += ((char*)xsdt_header)[i];
+    }
+    if (sum == 0)
+    {
+        println("Valid XSDT checksum");
+    }
+    else
+    {
+        panic("Invalid XSDT checksum");
+    }
+
+    ACPI_SDTHeader* mcfg_header = (ACPI_SDTHeader*) ACPI_find_table(xsdt_header, "MCFG");
+    if (mcfg_header)
+    {
+        println("Found MCFG");
+    }
+    else
+    {
+        panic("MCFG not found");
+    }
+
+    PCI_enumerate((ACPI_MCFGHeader*)mcfg_header);
+}
+
 
 void _start(BootInfo boot_info)
 {
