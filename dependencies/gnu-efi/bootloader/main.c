@@ -132,6 +132,19 @@ PSF1Font* LoadPSF1Font(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle
     return result;
 }
 
+UINTN strequal(CHAR8* a, CHARB* b, UINTN length)
+{
+    for (UINTN i = 0; i < length && *a == *b; i++)
+    {
+        if (*a != *b)
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 #define CHECK_KERNEL_FORMAT(cause, message) if (cause) { Print(L"Bad kernel format. Cause: "); Print(message); Print(L"\r\n"); return EFI_LOAD_ERROR; }
 EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	InitializeLib(ImageHandle, SystemTable);
@@ -243,6 +256,17 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
     }
 
+    EFI_CONFIGURATION_TABLE* config_table = SystemTable->ConfigurationTable;
+    void* rsdp = NULL;
+    EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
+
+    for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
+    {
+        if (CompareGuid(&config_table[index].VendorGuid, &AcpiTableGuid))
+        {
+        }
+    }
+
     typedef struct BooInfo
     {
         Framebuffer* framebuffer;
@@ -253,6 +277,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
             UINTN size;
             UINTN descriptor_size;
         } mmap;
+        void* rsdp;
     } BootInfo;
 
     BootInfo boot_info =
