@@ -64,7 +64,7 @@ typedef struct EFIMmap
     u64 descriptor_size;
 } EFIMmap;
 
-typedef struct PACKED ACPI_SDTHeader
+typedef struct PACKED ACPI_SDT_Header
 {
     char signature[4];
     u32 length;
@@ -75,13 +75,255 @@ typedef struct PACKED ACPI_SDTHeader
     u32 OEM_revision;
     u32 creator_ID;
     u32 creator_revision;
-} ACPI_SDTHeader;
+} ACPI_SDT_Header;
 
-typedef struct PACKED ACPI_MCFGHeader
+typedef struct PACKED ACPI_MCFG_Header
 {
-    ACPI_SDTHeader header;
+    ACPI_SDT_Header header;
     u64 reserved;
-} ACPI_MCFGHeader;
+} ACPI_MCFG_Header;
+
+typedef struct PACKED ACPI_MADT_Header
+{
+    ACPI_SDT_Header header;
+    u32 LAPIC_address;
+    u32 flags;
+} ACPI_MADT_Header;
+
+typedef struct PACKED ACPI_HPET_Header
+{
+    ACPI_SDT_Header header;
+    u8 hardware_revision_ID;
+    u8 comparator_count:5;
+    u8 counter_size:1;
+    u8 reserved0:1;
+    u8 legacy_replacement:1;
+    u16 PCI_vendor_ID;
+    u8 address_space_ID;
+    u8 register_bit_width;
+    u8 register_bit_offset;
+    u8 reserved1;
+    u64 address;
+    u8 HPET_number;
+    u16 minimum_tick;
+    u8 page_protection;
+} ACPI_HPET_Header;
+
+typedef struct PACKED HPET_GeneralCapabilitiesAnd_ID_Register
+{
+    u64 revision_ID:8;
+    u64 num_time_cap:5;
+    u64 count_size_cap:1;
+    u64 reserved:1;
+    u64 leg_rt_cap:1;
+    u64 vendor_ID:16;
+    u64 counter_clk_period:32;
+} HPET_GeneralCapabilitiesAnd_ID_Register;
+
+typedef struct PACKED HPET_GeneralConfigurationRegister
+{
+    u64 enable_cnf:1;
+    u64 leg_rt_cnf:1;
+    u64 reserved:62;
+} HPET_GeneralConfigurationRegister;
+
+typedef struct PACKED HPET_GeneralInterruptStatusRegister
+{
+    u32 n; // runtime-dependent
+    u32 reserved;
+} HPET_GeneralInterruptStatusRegister;
+
+typedef struct PACKED HPET_MainCounterValueRegister
+{
+    u64 main_counter_val;
+} HPET_MainCounterValueRegister;
+
+typedef struct PACKED HPET_TimerNConfigurationAndCapabilityRegister
+{
+    u64 reserved0:1;
+    u64 int_type_cnf:1;
+    u64 int_enb_conf:1;
+    u64 type_cnf:1;
+    u64 per_int_cap:1;
+    u64 size_cap:1;
+    u64 val_set_cnf:1;
+    u64 reserved:1;
+    u64 mode32_cnf:1;
+    u64 int_route_cnf:5;
+    u64 fsb_en_cnf:1;
+    u64 fst_int_del_cap:1;
+    u64 reserved1:16;
+    u64 int_route_cap:32;
+
+} HPET_TimerNConfigurationAndCapabilityRegister;
+
+typedef struct PACKED HPETRegister
+{
+    HPET_GeneralCapabilitiesAnd_ID_Register cap_and_ID;
+    u64 pad0;
+    HPET_GeneralConfigurationRegister configuration;
+    u64 pad1;
+    HPET_GeneralInterruptStatusRegister interrupt_status;
+    u64 pad2;
+    u64 padding[12 * 2];
+    HPET_MainCounterValueRegister main_counter_value;
+} HPETRegisters;
+
+typedef struct PACKED ACPI_MADT_EntryHeader
+{
+    u8 entry_type;
+    u8 record_length;
+} ACPI_MADT_EntryHeader;
+
+typedef enum ACPI_MADT_EntryType
+{
+    MADT_EntryType_LAPIC = 0,
+    MADT_EntryType_IO_APIC = 1,
+    MADT_EntryType_InterruptSourceOverride = 2,
+    MADT_EntryType_NonMaskableInterrupts = 4,
+    MADT_EntryType_LAPIC_AddressOverride = 5,
+    MADT_EntryType_Count = MADT_EntryType_LAPIC_AddressOverride,
+} ACPI_MADT_EntryType;
+
+typedef struct PACKED ACPI_MADT_LAPIC_Entry
+{
+    ACPI_MADT_EntryHeader header;
+    u8 ACPI_processor_ID;
+    u8 APIC_ID;
+    u32 flags;
+} ACPI_MADT_LAPIC_Entry;
+
+typedef struct PACKED ACPI_MADT_IO_APIC_Entry
+{
+    ACPI_MADT_EntryHeader header;
+    u8 IO_APIC_ID;
+    u8 reserved;
+    u32 IO_APIC_address;
+    u32 global_system_interrupt_base;
+} ACPI_MADT_IO_APIC_Entry;
+
+typedef struct PACKED ACPI_MADT_InterruptSourceOverride_Entry
+{
+    ACPI_MADT_EntryHeader header;
+    u8 bus_source;
+    u8 IRQ_source;
+    u32 global_system_interrupt;
+    u16 flags;
+} ACPI_MADT_InterruptSourceOverride_Entry;
+
+typedef struct PACKED ACPI_MADT_NonMaskableInterrupts_Entry
+{
+    ACPI_MADT_EntryHeader header;
+    u8 ACPI_processor_ID;
+    u16 flags;
+    u8 LINT;
+} ACPI_MADT_NonMaskableInterrupts_Entry;
+
+typedef struct PACKED ACPI_MADT_LAPIC_AddressOverride_Entry
+{
+    ACPI_MADT_EntryHeader header;
+    u16 reserved;
+    u64 LAPIC_physical_address;
+} ACPI_MADT_LAPIC_AddressOverride_Entry;
+
+typedef struct PACKED LAPIC_Register
+{
+    u32 reg;
+    u32 padding[3];
+} LAPIC_Register;
+
+typedef struct PACKED ICR
+{
+    u32 vector_number:8;
+    u32 destination_mode:3;
+    u32 destination_mode1:1;
+    u32 delivery_status:1;
+    u32 reserved0:1;
+    u32 bit14:1;
+    u32 bit15:1;
+    u32 reserved2:2;
+    u32 destination_type:2;
+    u32 reserved1:12;
+} ICR;
+
+typedef struct PACKED LAPICRegisters
+{
+    LAPIC_Register reserved0[2];
+    LAPIC_Register ID;
+    LAPIC_Register version;
+    LAPIC_Register reserved1[4];
+    LAPIC_Register TPR;
+    LAPIC_Register APR;
+    LAPIC_Register PPR;
+    LAPIC_Register EOI;
+    LAPIC_Register RRD;
+    LAPIC_Register LDR;
+    LAPIC_Register DFR;
+    LAPIC_Register SIV;
+    LAPIC_Register ISR[8];
+    LAPIC_Register TMR[8];
+    LAPIC_Register IRR[8];
+    LAPIC_Register ESR;
+    LAPIC_Register reserved2[6];
+    LAPIC_Register LVT_CMCI;
+    LAPIC_Register ICR[2];
+    LAPIC_Register LVT_Timer;
+    LAPIC_Register LVT_ThermalSensor;
+    LAPIC_Register LVT_PMC;
+    LAPIC_Register LVT_LINT0;
+    LAPIC_Register LVT_LINT1;
+    LAPIC_Register LVT_Error;
+    LAPIC_Register ICR_timer;
+    LAPIC_Register CCR_timer;
+    LAPIC_Register reserved3[4];
+    LAPIC_Register DCR_timer;
+    LAPIC_Register reserved4;
+} LAPICRegisters;
+
+typedef struct PACKED IO_APIC_ID_Register
+{
+    u32 reserved0:24;
+    u32 id:4;
+    u32 reserved1:4;
+} IO_APIC_ID_Register;
+
+typedef struct PACKED IO_APIC_VersionRegister
+{
+    u32 version:8;
+    u32 reserved0:8;
+    u32 max_redirection_entries:8;
+    u32 reserved:8;
+} IO_APIC_VersionRegister;
+
+typedef struct PACKED IO_APIC_ArbitrationPriorityRegister
+{
+    u32 reserved0:24;
+    u32 arbitration_priority:4;
+    u32 reserved1:4;
+} IO_APIC_ArbitrationPriorityRegister;
+
+typedef struct PACKED IO_APIC_RedirectionEntry
+{
+    u64 interrupt_vector:8;
+    u64 delivery_mode:3;
+    u64 destination_mode:1;
+    u64 delivery_status:1;
+    u64 pin_polarity:1;
+    u64 remote_IRR:1;
+    u64 trigger_mode:1;
+    u64 mask:1;
+    u64 unknown:39;
+    u64 destination:8;
+} IO_APIC_RedirectionEntry;
+
+typedef struct PACKED IO_APIC
+{
+    IO_APIC_ID_Register id;
+    IO_APIC_VersionRegister version;
+    IO_APIC_ArbitrationPriorityRegister arbitration_priority;
+    u32 padding[13];
+
+} IO_APIC;
 
 typedef struct PACKED ACPI_RSDPDescriptor1
 {
@@ -431,6 +673,10 @@ static const KernelCommand kernel_commands[] =
     },
 };
 
+static volatile LAPICRegisters* LAPIC = NULL;
+static volatile HPETRegisters* HPET = NULL;
+static u64 HPET_frequency = 1000000000000000;
+
 extern void load_gdt(GDTDescriptor* gdt_descriptor);
 
 static inline u64 abs(s64 value)
@@ -698,6 +944,17 @@ const char* hex_to_string_u64(u64 value)
 }
 
 void print(const char*);
+void println(const char*);
+void print_hex(u64 value)
+{
+    print("0x");
+    print(hex_to_string(value));
+}
+void println_hex(u64 value)
+{
+    print("0x");
+    println(hex_to_string(value));
+}
 
 void scroll(Renderer* renderer)
 {
@@ -1205,6 +1462,11 @@ void IDT_gate_new(void* handler, u8 entry_offset, u8 type_attribute, u8 selector
     i->selector = selector;
 }
 
+void IDT_load(void)
+{
+    asm("lidt %0" : : "m" (idtr));
+}
+
 void interrupts_setup(void)
 {
     idtr.limit = 0x0FFF;
@@ -1216,11 +1478,7 @@ void interrupts_setup(void)
     IDT_gate_new(keyboard_handler, 0x21, IDT_TA_InterruptGate, 0x08);
     IDT_gate_new(mouse_handler, 0x2C, IDT_TA_InterruptGate, 0x08);
 
-    asm("lidt %0" : : "m" (idtr));
-
-    PIC_remap();
-
-    asm("sti");
+    IDT_load();
 }
 
 void memory_setup(BootInfo boot_info)
@@ -1255,7 +1513,7 @@ void memory_setup(BootInfo boot_info)
     asm volatile("mov %0, %%cr3" : : "r" (PML4));
 }
 
-void panic(char* message)
+void panic(const char* message)
 {
     renderer.clear_color = Color_Red;
     fb_clear();
@@ -1268,9 +1526,195 @@ void panic(char* message)
 
 void reset_terminal(void);
 void ACPI_setup(BootInfo boot_info);
+ACPI_SDT_Header* ACPI_find_table(ACPI_SDT_Header* xsdt_header, const char* signature);
+void APIC_setup(void);
+
+void MADT_explore(ACPI_MADT_Header* MADT_header)
+{
+    u64 LAPIC_address = MADT_header->LAPIC_address;
+    bool LAPIC_address_override = false;
+    bool dual_legacy_PICS_installed = (MADT_header->flags & 0x01) == 1;
+    print("Dual legacy PICS installed: ");
+    println(dual_legacy_PICS_installed? "true" : "false");
+    u32 length = MADT_header->header.length;
+    ACPI_MADT_EntryHeader* end_of_MADT = (ACPI_MADT_EntryHeader*) ((u64)MADT_header + length);
+
+    u32 entry_count = 0;
+
+    for (ACPI_MADT_EntryHeader* it = (ACPI_MADT_EntryHeader*)(MADT_header + 1);
+            it != end_of_MADT;
+            it = (ACPI_MADT_EntryHeader*) ((u64)it + it->record_length), entry_count++)
+    {
+        u8 entry_type = it->entry_type;
+        switch (entry_type)
+        {
+            case MADT_EntryType_LAPIC:
+            {
+                ACPI_MADT_LAPIC_Entry* lapic = (ACPI_MADT_LAPIC_Entry*) it;
+                u8 processor_id = lapic->ACPI_processor_ID;
+                u8 APIC_id = lapic->APIC_ID;
+                u32 flags = lapic->flags;
+
+                println("MADT LAPIC entry:");
+                print("* ACPI processor ID: ");
+                println(unsigned_to_string(processor_id));
+                print("* APIC ID: ");
+                println(unsigned_to_string(APIC_id));
+                print("* Flags: ");
+                println(unsigned_to_string(flags));
+
+                break;
+            }
+            case MADT_EntryType_IO_APIC:
+            {
+                ACPI_MADT_IO_APIC_Entry* ioapic = (ACPI_MADT_IO_APIC_Entry*) it;
+                u8 id = ioapic->IO_APIC_ID;
+                u32 address = ioapic->IO_APIC_address;
+                u32 gsi = ioapic->global_system_interrupt_base;
+
+                println("MADT IO APIC entry:");
+                print("* APIC ID: ");
+                println(unsigned_to_string(id));
+                print("* Address: ");
+                println_hex(address);
+                print("* Global System Interrupt base: ");
+                println_hex(gsi);
+
+                break;
+            }
+            case MADT_EntryType_InterruptSourceOverride:
+            {
+                ACPI_MADT_InterruptSourceOverride_Entry* iso = (ACPI_MADT_InterruptSourceOverride_Entry*)it;
+                u8 bus_source = iso->bus_source;
+                u8 IRQ_source = iso->IRQ_source;
+                u32 gsi = iso->global_system_interrupt;
+                u16 flags = iso->flags;
+
+                println("MADT Interrupt Source Override entry:");
+                print("* Bus source: ");
+                println(unsigned_to_string(bus_source));
+                print("* IRQ source: ");
+                println(unsigned_to_string(IRQ_source));
+                print("* Global System Interrupt base: ");
+                println_hex(gsi);
+                print("* Flags: ");
+                println_hex(flags);
+
+                break;
+            }
+            case MADT_EntryType_NonMaskableInterrupts:
+            {
+                ACPI_MADT_NonMaskableInterrupts_Entry* nmi = (ACPI_MADT_NonMaskableInterrupts_Entry*)it;
+                u8 id = nmi->ACPI_processor_ID;
+                u16 flags = nmi->flags;
+                u8 LINT = nmi->LINT;
+
+                println("MADT Non-Maskable Interrupts entry:");
+                print("* ACPI processor ID: ");
+                println(unsigned_to_string(id));
+                print("* Flags: ");
+                println(unsigned_to_string(flags));
+                print("* LINT: ");
+                println(unsigned_to_string(LINT));
+                break;
+            }
+            case MADT_EntryType_LAPIC_AddressOverride:
+            {
+                ACPI_MADT_LAPIC_AddressOverride_Entry* lapic_ao =  (ACPI_MADT_LAPIC_AddressOverride_Entry*)it;
+                u64 address = lapic_ao->LAPIC_physical_address;
+
+                println("MADT LAPIC Address Override entry:");
+                print("LAPIC physical address: ");
+                println_hex(address);
+                LAPIC_address_override = true;
+                LAPIC_address = address;
+
+                break;
+            }
+            default:
+                panic("Unknown MADT entry type");
+                break;
+        }
+    }
+
+    print("Local APIC address: ");
+    print_hex(LAPIC_address);
+    print(" (override: ");
+    println(LAPIC_address_override? "true)" : "false)");
+    LAPIC = (LAPICRegisters*) LAPIC_address;
+
+    print("MADT entry count: ");
+    println(unsigned_to_string(entry_count));
+    new_line();
+
+}
+
+void HPET_explore(ACPI_HPET_Header* HPET_header)
+{
+    HPET = (HPETRegisters*) HPET_header->address;
+}
+
+void ACPI_setup(BootInfo boot_info)
+{
+    /*print("ACPI version: ");*/
+    /*println(unsigned_to_string(boot_info.rsdp->descriptor1.revision));*/
+
+    ACPI_SDT_Header* xsdt_header = (ACPI_SDT_Header*)boot_info.rsdp->XSDT_address;
+
+    /*u8 sum = 0;*/
+    /*for (u32 i = 0; i < xsdt_header->length; i++)*/
+    /*{*/
+        /*sum += ((char*)xsdt_header)[i];*/
+    /*}*/
+    /*if (sum == 0)*/
+    /*{*/
+        /*println("Valid XSDT checksum");*/
+    /*}*/
+    /*else*/
+    /*{*/
+        /*panic("Invalid XSDT checksum");*/
+    /*}*/
+
+    /*ACPI_print_tables(xsdt_header);*/
+
+    /*ACPI_SDT_Header* MCFG_header = ACPI_find_table(xsdt_header, "MCFG");*/
+    /*if (MCFG_header)*/
+    /*{*/
+        /*println("Found MCFG");*/
+    /*}*/
+    /*else*/
+    /*{*/
+        /*panic("MCFG not found");*/
+    /*}*/
+
+    /*PCI_enumerate((ACPI_MCFG_Header*)MCFG_header);*/
+
+    ACPI_SDT_Header* MADT_header = ACPI_find_table(xsdt_header, "APIC");
+    if (MADT_header)
+    {
+        println("Found MADT");
+    }
+    else
+    {
+        panic("MADT not found");
+    }
+
+    ACPI_SDT_Header* HPET_header = ACPI_find_table(xsdt_header, "HPET");
+    if (HPET_header)
+    {
+        println("Found HPET");
+    }
+    else
+    {
+        println("HPET not found");
+    }
+
+    MADT_explore((ACPI_MADT_Header*) MADT_header);
+    HPET_explore((ACPI_HPET_Header*) HPET_header);
+}
+
 void kernel_init(BootInfo boot_info)
 {
-    load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
 
     renderer = (const Renderer)
     {
@@ -1285,10 +1729,13 @@ void kernel_init(BootInfo boot_info)
 
     fb_clear();
     interrupts_setup();
+    ACPI_setup(boot_info);
+    load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
+    APIC_setup();
 
     PS2_mouse_init();
 
-    ACPI_setup(boot_info);
+
 
     outb(PIC1_DATA, 0b11111001);
     outb(PIC2_DATA, 0b11101111);
@@ -1762,15 +2209,39 @@ void process_command(void)
     println("Unknown command");
 }
 
-ACPI_SDTHeader* ACPI_find_table(ACPI_SDTHeader* xsdt_header, const char* table_signature)
+void ACPI_print_tables(ACPI_SDT_Header* xsdt_header)
 {
-    u32 table_count = (xsdt_header->length - sizeof(ACPI_SDTHeader)) / 8;
+    u32 table_count = (xsdt_header->length - sizeof(ACPI_SDT_Header)) / 8;
+    // Point to the end of the header (the beginning of the tables
+    u64* pointer_table = (u64*)(xsdt_header + 1);
+
+    print("ACPI tables: ");
+    println(unsigned_to_string(table_count));
+    for (u32 i = 0; i < table_count; i++)
+    {
+        print("Table ");
+        print(unsigned_to_string(i));
+        print(": ");
+        ACPI_SDT_Header* table_header = (ACPI_SDT_Header*) pointer_table[i];
+        for (u32 c = 0; c < sizeof(table_header->signature); c++)
+        {
+            putc(table_header->signature[c]);
+        }
+        print(" @");
+        print_hex((u64)table_header);
+        new_line();
+    }
+}
+
+ACPI_SDT_Header* ACPI_find_table(ACPI_SDT_Header* xsdt_header, const char* table_signature)
+{
+    u32 table_count = (xsdt_header->length - sizeof(ACPI_SDT_Header)) / 8;
     // Point to the end of the header (the beginning of the tables
     u64* pointer_table = (u64*)(xsdt_header + 1);
 
     for (u32 i = 0; i < table_count; i++)
     {
-        ACPI_SDTHeader* table_header = (ACPI_SDTHeader*) pointer_table[i];
+        ACPI_SDT_Header* table_header = (ACPI_SDT_Header*) pointer_table[i];
         if (memequal(table_header->signature, table_signature, sizeof(table_header->signature)))
         {
             return table_header;
@@ -1793,8 +2264,9 @@ void PCI_enumerate_function(u64 device_address, u64 function)
         return;
     }
 
+    print("Device ID: ");
     print(hex_to_string(pci_device_header->device_ID));
-    print(" ");
+    print(". Vendor ID: ");
     println(hex_to_string(pci_device_header->vendor_ID));
 }
 
@@ -1837,13 +2309,14 @@ void PCI_enumerate_bus(u64 base_address, u64 bus)
     }
 }
 
-void PCI_enumerate(ACPI_MCFGHeader* mcfg_header)
+void PCI_enumerate(ACPI_MCFG_Header* mcfg_header)
 {
     new_line();
 
-    u32 mcfg_entries = (mcfg_header->header.length - sizeof(ACPI_MCFGHeader)) / sizeof(ACPI_DeviceConfig);
+    u32 mcfg_entries = (mcfg_header->header.length - sizeof(ACPI_MCFG_Header)) / sizeof(ACPI_DeviceConfig);
     print("MCFG entries: ");
     println(unsigned_to_string(mcfg_entries));
+    println("Listing PCI devices:");
 
     ACPI_DeviceConfig* device_config_array = (ACPI_DeviceConfig*)(mcfg_header + 1);
     memmap(device_config_array, device_config_array);
@@ -1862,45 +2335,205 @@ void PCI_enumerate(ACPI_MCFGHeader* mcfg_header)
     new_line();
 }
 
-void ACPI_setup(BootInfo boot_info)
+void PIC_mask_IRQ(u8 IRQ)
 {
-    print("ACPI version: ");
-    println(unsigned_to_string(boot_info.rsdp->descriptor1.revision));
-
-    ACPI_SDTHeader* xsdt_header = (ACPI_SDTHeader*)boot_info.rsdp->XSDT_address;
-
-    u8 sum = 0;
-    for (u32 i = 0; i < xsdt_header->length; i++)
+    u16 port;
+    if (IRQ < 8)
     {
-        sum += ((char*)xsdt_header)[i];
-    }
-    if (sum == 0)
-    {
-        println("Valid XSDT checksum");
+        port = PIC1_DATA;
     }
     else
     {
-        panic("Invalid XSDT checksum");
+        port = PIC2_DATA;
+        IRQ -= 8;
     }
 
-    ACPI_SDTHeader* mcfg_header = (ACPI_SDTHeader*) ACPI_find_table(xsdt_header, "MCFG");
-    if (mcfg_header)
-    {
-        println("Found MCFG");
-    }
-    else
-    {
-        panic("MCFG not found");
-    }
-
-    PCI_enumerate((ACPI_MCFGHeader*)mcfg_header);
+    u8 value = inb(port);
+    value |= 1 << IRQ;
+    outb(port, value);
 }
 
+void PIC_unmask_IRQ(u8 IRQ)
+{
+    u16 port;
+    if (IRQ < 8)
+    {
+        port = PIC1_DATA;
+    }
+    else
+    {
+        port = PIC2_DATA;
+        IRQ -= 8;
+    }
+
+    u8 value = inb(port);
+    value &= ~(1 << IRQ);
+    outb(port, value);
+}
+
+void APIC_remap_PIC(void)
+{
+    outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+    outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+    outb(PIC1_DATA, 0x20);
+    outb(PIC2_DATA, 0x28);
+    outb(PIC1_DATA, 0x04);
+    outb(PIC2_DATA, 0x02);
+    outb(PIC1_DATA, 0x01);
+    outb(PIC2_DATA, 0x01);
+}
+
+void APIC_PIC_mask_all(void)
+{
+    outb(PIC1_DATA, 0xFF);
+    outb(PIC2_DATA, 0xFF);
+}
+
+void APIC_disable_PIC(void)
+{
+    APIC_remap_PIC();
+    APIC_PIC_mask_all();
+}
+
+static const u32 APIC_LVT_INT_UNMASKED = 0 << 16;
+static const u32 APIC_LVT_INT_MASKED = 1 << 16;
+static const u32 APIC_LVT_DELIVERY_MODE_NMI = 4 << 8;
+static const u32 APIC_SPURIOUS_IVT_SOFTWARE_ENABLE = 0x100;
+static const u32 APIC_LVT_TIMER_MODE_PERIODIC = 1 << 17;
+
+#define PIT_FREQUENCY	1193180
+
+#define PIT_CHANNEL_0				0x00	// 00......
+#define PIT_CHANNEL_1				0x40	// 01......
+#define PIT_CHANNEL_2				0x80	// 10......
+#define PIT_CHANNEL_READBACK		0xC0	// 11......
+#define PIT_ACCESS_LATCHCOUNT		0x00	// ..00....
+#define PIT_ACCESS_LOBYTE			0x10	// ..01....
+#define PIT_ACCESS_HIBYTE			0x20	// ..10....
+#define PIT_ACCESS_LOHIBYTE			0x30	// ..11....
+#define PIT_OPMODE_0_IOTC			0x00	// ....000.
+#define PIT_OPMODE_1_ONESHOT		0x02	// ....001.
+#define PIT_OPMODE_2_RATE_GEN		0x04	// ....010.
+#define PIT_OPMODE_3_SQUARE_WAV		0x06	// ....011.
+#define PIT_OPMODE_4_SOFTWARESTROBE	0x08	// ....100.
+#define PIT_OPMODE_4_HARDWARESTROBE	0x0A	// ....101.
+#define PIT_OPMODE_4_RATE_GEN		0x0C	// ....110.
+#define PIT_OPMODE_4_SQUARE_WAV		0x0E	// ....111.
+#define PIT_BINARY					0x00	// .......0
+#define PIT_BCD						0x01	// .......1
+
+static u32 sleep_divisor;
+
+void PIT_prepare_sleep(u32 microseconds)
+{
+    if (microseconds > 54000)
+    {
+        panic("Illegal use of sleep");
+        return;
+    }
+
+    u8 speaker_control_byte = inb(0x61);
+    speaker_control_byte &= ~2;
+    outb(0x61, speaker_control_byte);
+
+    outb(0x43, PIT_CHANNEL_2 | PIT_OPMODE_0_IOTC | PIT_ACCESS_LOHIBYTE);
+
+    sleep_divisor = PIT_FREQUENCY / (1000 * 1000 / microseconds);
+}
+
+void PIT_sleep(void)
+{
+    outb(0x42, sleep_divisor & 0xFF);
+    outb(0x42, sleep_divisor >> 8);
+
+    u8 PIT_control_byte = inb(0x61);
+    outb(0x61, (u8) PIT_control_byte & ~1);
+    outb(0x61, (u8) PIT_control_byte | 1);
+
+    while (!(inb(0x61) & 0x20));
+}
+
+#define assert(x) _assert(x, #x)
+
+void _assert(bool condition, const char* condition_name)
+{
+    if (!condition)
+    {
+        panic(condition_name);
+    }
+}
+
+void LAPIC_timer_setup(void)
+{
+    LAPIC->DCR_timer.reg = 0x03;
+    PIT_prepare_sleep(10000);
+    LAPIC->ICR_timer.reg = 0xFFFFFFFF;
+    PIT_sleep();
+    LAPIC->LVT_Timer.reg = APIC_LVT_INT_MASKED;
+    u32 tick_count = 0xFFFFFFFF - LAPIC->CCR_timer.reg;
+
+    LAPIC->LVT_Timer.reg = 32 | APIC_LVT_TIMER_MODE_PERIODIC;
+    LAPIC->DCR_timer.reg = 0x03;
+    u32 value = tick_count / 10;
+    u64 address = (u64)&LAPIC->ICR_timer.reg;
+    while(1);
+    LAPIC->ICR_timer.reg = value;
+    println("LAPIC timer initialized!");
+    print("Tick count: ");
+    println(unsigned_to_string(tick_count));
+}
+
+void LAPIC_setup(void)
+{
+    memmap((void*)LAPIC, (void*)LAPIC);
+    LAPIC->DFR.reg = 0xFFFFFFFF;
+    LAPIC->LDR.reg = (LAPIC->LDR.reg & 0x00FFFFFF) | 1;
+    LAPIC->LVT_Timer.reg = APIC_LVT_INT_MASKED;
+    LAPIC->LVT_PMC.reg = APIC_LVT_DELIVERY_MODE_NMI;
+    LAPIC->LVT_LINT0.reg = APIC_LVT_INT_MASKED;
+    LAPIC->LVT_LINT1.reg = APIC_LVT_INT_MASKED;
+    LAPIC->TPR.reg = 0;
+
+    LAPIC->SIV.reg = 0xFF | APIC_SPURIOUS_IVT_SOFTWARE_ENABLE;
+    println("LAPIC successfully initialized!");
+}
+
+void HPET_setup(void)
+{
+    memmap((void*)HPET, (void*)HPET);
+    print("HPET address: ");
+    println_hex((u64)HPET);
+    u32 period = HPET->cap_and_ID.counter_clk_period;
+    HPET_frequency /= period;
+
+    print("HPET period:    ");
+    print(unsigned_to_string(period));
+    println(" femtoseconds");
+    print("HPET frequency: ");
+    print(unsigned_to_string(HPET_frequency));
+    println(" femtoseconds");
+
+    HPET->configuration.enable_cnf = 1;
+    print("HPET is enabled now: ");
+
+    print("HPET enabled: ");
+    println(HPET->configuration.enable_cnf ? "true" : "false");
+    print("HPET legacy mode: ");
+    println(HPET->configuration.leg_rt_cnf ? "true" : "false");
+}
+
+
+void APIC_setup(void)
+{
+    APIC_disable_PIC();
+
+    LAPIC_setup();
+    HPET_setup();
+}
 
 void _start(BootInfo boot_info)
 {
     kernel_init(boot_info);
-
 
     while (true)
     {
