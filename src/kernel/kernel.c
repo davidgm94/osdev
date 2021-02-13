@@ -109,65 +109,65 @@ typedef struct PACKED ACPI_HPET_Header
     u8 page_protection;
 } ACPI_HPET_Header;
 
-typedef struct PACKED HPET_GeneralCapabilitiesAnd_ID_Register
-{
-    u64 revision_ID:8;
-    u64 num_time_cap:5;
-    u64 count_size_cap:1;
-    u64 reserved:1;
-    u64 leg_rt_cap:1;
-    u64 vendor_ID:16;
-    u64 counter_clk_period:32;
-} HPET_GeneralCapabilitiesAnd_ID_Register;
+/*typedef struct PACKED HPET_GeneralCapabilitiesAnd_ID_Register*/
+/*{*/
+    /*u64 revision_ID:8;*/
+    /*u64 num_time_cap:5;*/
+    /*u64 count_size_cap:1;*/
+    /*u64 reserved:1;*/
+    /*u64 leg_rt_cap:1;*/
+    /*u64 vendor_ID:16;*/
+    /*u64 counter_clk_period:32;*/
+/*} HPET_GeneralCapabilitiesAnd_ID_Register;*/
 
-typedef struct PACKED HPET_GeneralConfigurationRegister
-{
-    u64 enable_cnf:1;
-    u64 leg_rt_cnf:1;
-    u64 reserved:62;
-} HPET_GeneralConfigurationRegister;
+/*typedef struct PACKED HPET_GeneralConfigurationRegister*/
+/*{*/
+    /*u64 enable_cnf:1;*/
+    /*u64 leg_rt_cnf:1;*/
+    /*u64 reserved:62;*/
+/*} HPET_GeneralConfigurationRegister;*/
 
-typedef struct PACKED HPET_GeneralInterruptStatusRegister
-{
-    u32 n; // runtime-dependent
-    u32 reserved;
-} HPET_GeneralInterruptStatusRegister;
+/*typedef struct PACKED HPET_GeneralInterruptStatusRegister*/
+/*{*/
+    /*u32 n; // runtime-dependent*/
+    /*u32 reserved;*/
+/*} HPET_GeneralInterruptStatusRegister;*/
 
-typedef struct PACKED HPET_MainCounterValueRegister
-{
-    u64 main_counter_val;
-} HPET_MainCounterValueRegister;
+/*typedef struct PACKED HPET_MainCounterValueRegister*/
+/*{*/
+    /*u64 main_counter_val;*/
+/*} HPET_MainCounterValueRegister;*/
 
-typedef struct PACKED HPET_TimerNConfigurationAndCapabilityRegister
-{
-    u64 reserved0:1;
-    u64 int_type_cnf:1;
-    u64 int_enb_conf:1;
-    u64 type_cnf:1;
-    u64 per_int_cap:1;
-    u64 size_cap:1;
-    u64 val_set_cnf:1;
-    u64 reserved:1;
-    u64 mode32_cnf:1;
-    u64 int_route_cnf:5;
-    u64 fsb_en_cnf:1;
-    u64 fst_int_del_cap:1;
-    u64 reserved1:16;
-    u64 int_route_cap:32;
+/*typedef struct PACKED HPET_TimerNConfigurationAndCapabilityRegister*/
+/*{*/
+    /*u64 reserved0:1;*/
+    /*u64 int_type_cnf:1;*/
+    /*u64 int_enb_conf:1;*/
+    /*u64 type_cnf:1;*/
+    /*u64 per_int_cap:1;*/
+    /*u64 size_cap:1;*/
+    /*u64 val_set_cnf:1;*/
+    /*u64 reserved:1;*/
+    /*u64 mode32_cnf:1;*/
+    /*u64 int_route_cnf:5;*/
+    /*u64 fsb_en_cnf:1;*/
+    /*u64 fst_int_del_cap:1;*/
+    /*u64 reserved1:16;*/
+    /*u64 int_route_cap:32;*/
 
-} HPET_TimerNConfigurationAndCapabilityRegister;
+/*} HPET_TimerNConfigurationAndCapabilityRegister;*/
 
-typedef struct PACKED HPETRegister
-{
-    HPET_GeneralCapabilitiesAnd_ID_Register cap_and_ID;
-    u64 pad0;
-    HPET_GeneralConfigurationRegister configuration;
-    u64 pad1;
-    HPET_GeneralInterruptStatusRegister interrupt_status;
-    u64 pad2;
-    u64 padding[12 * 2];
-    HPET_MainCounterValueRegister main_counter_value;
-} HPETRegisters;
+/*typedef struct PACKED HPETRegisters*/
+/*{*/
+    /*HPET_GeneralCapabilitiesAnd_ID_Register cap_and_ID;*/
+    /*u64 pad0;*/
+    /*HPET_GeneralConfigurationRegister configuration;*/
+    /*u64 pad1;*/
+    /*HPET_GeneralInterruptStatusRegister interrupt_status;*/
+    /*u64 pad2;*/
+    /*u64 padding[12 * 2];*/
+    /*HPET_MainCounterValueRegister main_counter_value;*/
+/*} HPETRegisters;*/
 
 typedef struct PACKED ACPI_MADT_EntryHeader
 {
@@ -226,104 +226,104 @@ typedef struct PACKED ACPI_MADT_LAPIC_AddressOverride_Entry
     u64 LAPIC_physical_address;
 } ACPI_MADT_LAPIC_AddressOverride_Entry;
 
-typedef struct PACKED LAPIC_Register
-{
-    u32 reg;
-    u32 padding[3];
-} LAPIC_Register;
+/*typedef struct PACKED LAPIC_Register*/
+/*{*/
+    /*u32 reg;*/
+    /*u32 padding[3];*/
+/*} LAPIC_Register;*/
 
-typedef struct PACKED ICR
-{
-    u32 vector_number:8;
-    u32 destination_mode:3;
-    u32 destination_mode1:1;
-    u32 delivery_status:1;
-    u32 reserved0:1;
-    u32 bit14:1;
-    u32 bit15:1;
-    u32 reserved2:2;
-    u32 destination_type:2;
-    u32 reserved1:12;
-} ICR;
+/*typedef struct PACKED ICR*/
+/*{*/
+    /*u32 vector_number:8;*/
+    /*u32 destination_mode:3;*/
+    /*u32 destination_mode1:1;*/
+    /*u32 delivery_status:1;*/
+    /*u32 reserved0:1;*/
+    /*u32 bit14:1;*/
+    /*u32 bit15:1;*/
+    /*u32 reserved2:2;*/
+    /*u32 destination_type:2;*/
+    /*u32 reserved1:12;*/
+/*} ICR;*/
 
-typedef struct PACKED LAPICRegisters
-{
-    LAPIC_Register reserved0[2];
-    LAPIC_Register ID;
-    LAPIC_Register version;
-    LAPIC_Register reserved1[4];
-    LAPIC_Register TPR;
-    LAPIC_Register APR;
-    LAPIC_Register PPR;
-    LAPIC_Register EOI;
-    LAPIC_Register RRD;
-    LAPIC_Register LDR;
-    LAPIC_Register DFR;
-    LAPIC_Register SIV;
-    LAPIC_Register ISR[8];
-    LAPIC_Register TMR[8];
-    LAPIC_Register IRR[8];
-    LAPIC_Register ESR;
-    LAPIC_Register reserved2[6];
-    LAPIC_Register LVT_CMCI;
-    LAPIC_Register ICR[2];
-    LAPIC_Register LVT_Timer;
-    LAPIC_Register LVT_ThermalSensor;
-    LAPIC_Register LVT_PMC;
-    LAPIC_Register LVT_LINT0;
-    LAPIC_Register LVT_LINT1;
-    LAPIC_Register LVT_Error;
-    LAPIC_Register ICR_timer;
-    LAPIC_Register CCR_timer;
-    LAPIC_Register reserved3[4];
-    LAPIC_Register DCR_timer;
-    LAPIC_Register reserved4;
-} LAPICRegisters;
+/*typedef struct PACKED LAPICRegisters*/
+/*{*/
+    /*LAPIC_Register reserved0[2];*/
+    /*LAPIC_Register ID;*/
+    /*LAPIC_Register version;*/
+    /*LAPIC_Register reserved1[4];*/
+    /*LAPIC_Register TPR;*/
+    /*LAPIC_Register APR;*/
+    /*LAPIC_Register PPR;*/
+    /*LAPIC_Register EOI;*/
+    /*LAPIC_Register RRD;*/
+    /*LAPIC_Register LDR;*/
+    /*LAPIC_Register DFR;*/
+    /*LAPIC_Register SIV;*/
+    /*LAPIC_Register ISR[8];*/
+    /*LAPIC_Register TMR[8];*/
+    /*LAPIC_Register IRR[8];*/
+    /*LAPIC_Register ESR;*/
+    /*LAPIC_Register reserved2[6];*/
+    /*LAPIC_Register LVT_CMCI;*/
+    /*LAPIC_Register ICR[2];*/
+    /*LAPIC_Register LVT_Timer;*/
+    /*LAPIC_Register LVT_ThermalSensor;*/
+    /*LAPIC_Register LVT_PMC;*/
+    /*LAPIC_Register LVT_LINT0;*/
+    /*LAPIC_Register LVT_LINT1;*/
+    /*LAPIC_Register LVT_Error;*/
+    /*LAPIC_Register ICR_timer;*/
+    /*LAPIC_Register CCR_timer;*/
+    /*LAPIC_Register reserved3[4];*/
+    /*LAPIC_Register DCR_timer;*/
+    /*LAPIC_Register reserved4;*/
+/*} LAPICRegisters;*/
 
-typedef struct PACKED IO_APIC_ID_Register
-{
-    u32 reserved0:24;
-    u32 id:4;
-    u32 reserved1:4;
-} IO_APIC_ID_Register;
+/*typedef struct PACKED IO_APIC_ID_Register*/
+/*{*/
+    /*u32 reserved0:24;*/
+    /*u32 id:4;*/
+    /*u32 reserved1:4;*/
+/*} IO_APIC_ID_Register;*/
 
-typedef struct PACKED IO_APIC_VersionRegister
-{
-    u32 version:8;
-    u32 reserved0:8;
-    u32 max_redirection_entries:8;
-    u32 reserved:8;
-} IO_APIC_VersionRegister;
+/*typedef struct PACKED IO_APIC_VersionRegister*/
+/*{*/
+    /*u32 version:8;*/
+    /*u32 reserved0:8;*/
+    /*u32 max_redirection_entries:8;*/
+    /*u32 reserved:8;*/
+/*} IO_APIC_VersionRegister;*/
 
-typedef struct PACKED IO_APIC_ArbitrationPriorityRegister
-{
-    u32 reserved0:24;
-    u32 arbitration_priority:4;
-    u32 reserved1:4;
-} IO_APIC_ArbitrationPriorityRegister;
+/*typedef struct PACKED IO_APIC_ArbitrationPriorityRegister*/
+/*{*/
+    /*u32 reserved0:24;*/
+    /*u32 arbitration_priority:4;*/
+    /*u32 reserved1:4;*/
+/*} IO_APIC_ArbitrationPriorityRegister;*/
 
-typedef struct PACKED IO_APIC_RedirectionEntry
-{
-    u64 interrupt_vector:8;
-    u64 delivery_mode:3;
-    u64 destination_mode:1;
-    u64 delivery_status:1;
-    u64 pin_polarity:1;
-    u64 remote_IRR:1;
-    u64 trigger_mode:1;
-    u64 mask:1;
-    u64 unknown:39;
-    u64 destination:8;
-} IO_APIC_RedirectionEntry;
+/*typedef struct PACKED IO_APIC_RedirectionEntry*/
+/*{*/
+    /*u64 interrupt_vector:8;*/
+    /*u64 delivery_mode:3;*/
+    /*u64 destination_mode:1;*/
+    /*u64 delivery_status:1;*/
+    /*u64 pin_polarity:1;*/
+    /*u64 remote_IRR:1;*/
+    /*u64 trigger_mode:1;*/
+    /*u64 mask:1;*/
+    /*u64 unknown:39;*/
+    /*u64 destination:8;*/
+/*} IO_APIC_RedirectionEntry;*/
 
-typedef struct PACKED IO_APIC
-{
-    IO_APIC_ID_Register id;
-    IO_APIC_VersionRegister version;
-    IO_APIC_ArbitrationPriorityRegister arbitration_priority;
-    u32 padding[13];
+/*typedef struct PACKED IO_APIC*/
+/*{*/
+    /*IO_APIC_ID_Register id;*/
+    /*IO_APIC_VersionRegister version;*/
+    /*IO_APIC_ArbitrationPriorityRegister arbitration_priority;*/
+    /*u32 padding[13];*/
 
-} IO_APIC;
+/*} IO_APIC;*/
 
 typedef struct PACKED ACPI_RSDPDescriptor1
 {
@@ -673,9 +673,11 @@ static const KernelCommand kernel_commands[] =
     },
 };
 
-static volatile LAPICRegisters* LAPIC = NULL;
-static volatile HPETRegisters* HPET = NULL;
+static volatile const u64 IA32_APIC_base = 0x1b;
+static u64 LAPIC_address = 0;
+static u64 HPET_address = 0;
 static u64 HPET_frequency = 1000000000000000;
+static u64 HPET_clk = 0;
 
 extern void load_gdt(GDTDescriptor* gdt_descriptor);
 
@@ -1531,7 +1533,7 @@ void APIC_setup(void);
 
 void MADT_explore(ACPI_MADT_Header* MADT_header)
 {
-    u64 LAPIC_address = MADT_header->LAPIC_address;
+    LAPIC_address = MADT_header->LAPIC_address;
     bool LAPIC_address_override = false;
     bool dual_legacy_PICS_installed = (MADT_header->flags & 0x01) == 1;
     print("Dual legacy PICS installed: ");
@@ -1641,7 +1643,6 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
     print_hex(LAPIC_address);
     print(" (override: ");
     println(LAPIC_address_override? "true)" : "false)");
-    LAPIC = (LAPICRegisters*) LAPIC_address;
 
     print("MADT entry count: ");
     println(unsigned_to_string(entry_count));
@@ -1651,7 +1652,7 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
 
 void HPET_explore(ACPI_HPET_Header* HPET_header)
 {
-    HPET = (HPETRegisters*) HPET_header->address;
+    HPET_address = HPET_header->address;
 }
 
 void ACPI_setup(BootInfo boot_info)
@@ -2463,72 +2464,183 @@ void _assert(bool condition, const char* condition_name)
     }
 }
 
-void LAPIC_timer_setup(void)
+typedef enum LAPICRegister
 {
-    LAPIC->DCR_timer.reg = 0x03;
-    PIT_prepare_sleep(10000);
-    LAPIC->ICR_timer.reg = 0xFFFFFFFF;
-    PIT_sleep();
-    LAPIC->LVT_Timer.reg = APIC_LVT_INT_MASKED;
-    u32 tick_count = 0xFFFFFFFF - LAPIC->CCR_timer.reg;
+    LAPIC_Reserved0 = 0x000,
+    LAPIC_ID_Register = 0x020,
+    LAPIC_VersionRegister = 0x030,
+    LAPIC_Reserved1 = 0x040,
+    TaskPriorityRegister = 0x080,
+    ArbitrationPriorityRegister = 0x090,
+    ProcessorPriorityRegister = 0x0A0,
+    EOI_Register = 0x0B0,
+    RemoteReadRegister = 0x0C0,
+    LogicalDestinationRegister = 0x0D0,
+    DestinationFormatRegister = 0x0E0,
+    SpuriousInterruptVectorRegister = 0x0F0,
+    In_ServiceRegister = 0x100,
+    TriggerModeRegister = 0x180,
+    InterruptRequestRegister = 0x200,
+    ErrorStatusRegister = 0x280,
+    LAPIC_Reserved2 = 0x290,
+    LVT_CorrectedMachineCheckInterruptRegister = 0x2F0,
+    InterruptCommandRegister = 0x300,
+    LVT_TimerRegister = 0x320,
+    LVT_ThermalSensorRegister = 0x330,
+    LVT_PerformanceMonitoringCounterRegister = 0x340,
+    LVT_LINT0_Register = 0x350,
+    LVT_LINT1_Register = 0x360,
+    LVT_ErrorRegister = 0x370,
+    InitialCountRegisterForTimer = 0x380,
+    CurrentCountRegisterForTimer = 0x390,
+    LAPIC_Reserved3 = 0x3A0,
+    DivideConfigurationRegisterForTimer = 0x3E0,
+    LAPIC_Reserved4 = 0x3F0,
+} LAPICRegister;
 
-    LAPIC->LVT_Timer.reg = 32 | APIC_LVT_TIMER_MODE_PERIODIC;
-    LAPIC->DCR_timer.reg = 0x03;
-    u32 value = tick_count / 10;
-    u64 address = (u64)&LAPIC->ICR_timer.reg;
-    while(1);
-    LAPIC->ICR_timer.reg = value;
-    println("LAPIC timer initialized!");
-    print("Tick count: ");
-    println(unsigned_to_string(tick_count));
+void LAPIC_write(u16 offset, u32 value)
+{
+    u32* volatile lapic_address = (u32* volatile) (LAPIC_address + offset);
+    *lapic_address = value;
+}
+
+u32 LAPIC_read(u16 offset)
+{
+    u32* volatile lapic_address = (u32* volatile) (LAPIC_address + offset);
+    return *lapic_address;
+}
+
+bool APIC_enabled(void)
+{
+    return rdmsr(IA32_APIC_base) & (1 << 11);
 }
 
 void LAPIC_setup(void)
 {
-    memmap((void*)LAPIC, (void*)LAPIC);
-    LAPIC->DFR.reg = 0xFFFFFFFF;
-    LAPIC->LDR.reg = (LAPIC->LDR.reg & 0x00FFFFFF) | 1;
-    LAPIC->LVT_Timer.reg = APIC_LVT_INT_MASKED;
-    LAPIC->LVT_PMC.reg = APIC_LVT_DELIVERY_MODE_NMI;
-    LAPIC->LVT_LINT0.reg = APIC_LVT_INT_MASKED;
-    LAPIC->LVT_LINT1.reg = APIC_LVT_INT_MASKED;
-    LAPIC->TPR.reg = 0;
+    memmap((void*)LAPIC_address, (void*)LAPIC_address);
 
-    LAPIC->SIV.reg = 0xFF | APIC_SPURIOUS_IVT_SOFTWARE_ENABLE;
-    println("LAPIC successfully initialized!");
+    LAPIC_write(DestinationFormatRegister, 0xFFFFFFFF);
+    u32 ldr = LAPIC_read(LogicalDestinationRegister);
+    LAPIC_write(LogicalDestinationRegister, (ldr & 0x00FFFFFF) | 1);
+    LAPIC_write(LVT_TimerRegister, APIC_LVT_INT_MASKED);
+    LAPIC_write(LVT_PerformanceMonitoringCounterRegister, APIC_LVT_DELIVERY_MODE_NMI);
+    LAPIC_write(LVT_LINT0_Register, APIC_LVT_INT_MASKED);
+    LAPIC_write(LVT_LINT1_Register, APIC_LVT_INT_MASKED);
+    LAPIC_write(TaskPriorityRegister, 0);
+    LAPIC_write(SpuriousInterruptVectorRegister, 0xFF | APIC_SPURIOUS_IVT_SOFTWARE_ENABLE);
+
+    if (APIC_enabled())
+    {
+        println("LAPIC initialized successfully!");
+    }
+    else
+    {
+        panic("LAPIC failed to initialize!");
+    }
 }
+
+void HPET_write(u64 reg, u64 value)
+{
+    u64* volatile hpet_address = (u64* volatile) (HPET_address + reg);
+    *hpet_address = value;
+}
+
+u64 HPET_read(u64 reg)
+{
+    u64* volatile hpet_address = (u64* volatile) (HPET_address + reg);
+    return *hpet_address;
+}
+
+typedef enum HPETRegister
+{
+    GeneralCapabilitiesAndIDRegister = 0x000,
+    GeneralConfigurationRegister = 0x010,
+    GeneralInterruptStatusRegister = 0x020,
+    MainCounterValueRegister = 0x0F0,
+} HPETRegister;
 
 void HPET_setup(void)
 {
-    memmap((void*)HPET, (void*)HPET);
-    print("HPET address: ");
-    println_hex((u64)HPET);
-    u32 period = HPET->cap_and_ID.counter_clk_period;
-    HPET_frequency /= period;
+    memmap((void*)HPET_address, (void*)HPET_address);
+    HPET_write(GeneralConfigurationRegister, 1);
+    u64 cnf_reg = HPET_read(GeneralConfigurationRegister);
+    u64 period_helper = HPET_read(GeneralCapabilitiesAndIDRegister);
+    HPET_clk = (period_helper >> 32) & 0xFFFFFFFF;
+    HPET_frequency /= HPET_clk;
 
-    print("HPET period:    ");
-    print(unsigned_to_string(period));
-    println(" femtoseconds");
-    print("HPET frequency: ");
-    print(unsigned_to_string(HPET_frequency));
-    println(" femtoseconds");
-
-    HPET->configuration.enable_cnf = 1;
-    print("HPET is enabled now: ");
-
-    print("HPET enabled: ");
-    println(HPET->configuration.enable_cnf ? "true" : "false");
-    print("HPET legacy mode: ");
-    println(HPET->configuration.leg_rt_cnf ? "true" : "false");
+    if (((cnf_reg & 1) == 1))
+    {
+        print("HPET initialized! Frequency: ");
+        print(unsigned_to_string(HPET_frequency));
+        println(" femtoseconds");
+    }
+    else
+    {
+        panic("HPET failed to initialize!");
+    }
 }
 
+static void LAPIC_timer_set_mask(u64 mask)
+{
+    u32 entry = LAPIC_read(LVT_TimerRegister);
+    if (mask)
+    {
+        entry |= 1UL << 16;
+    }
+    else
+    {
+        entry &= ~(1UL << 16);
+    }
+
+    LAPIC_write(LVT_TimerRegister, entry);
+}
+
+void HPET_poll_and_sleep(u64 ms)
+{
+    u64 main_counter_value = HPET_read(MainCounterValueRegister);
+    u64 target = main_counter_value + (ms * 1000000000000) / HPET_clk;
+
+    while (main_counter_value < target)
+    {
+        main_counter_value = HPET_read(MainCounterValueRegister);
+    }
+}
+
+void LAPIC_timer_setup(void)
+{
+    LAPIC_write(DivideConfigurationRegisterForTimer, 0x3);
+
+    LAPIC_write(InitialCountRegisterForTimer, 0xffffffff);
+    HPET_poll_and_sleep(10);
+    LAPIC_write(LVT_TimerRegister, APIC_LVT_INT_MASKED);
+
+    u64 tick_count = LAPIC_read(CurrentCountRegisterForTimer);
+    u64 ticks_per_ms = (0xffffffff - tick_count) / 10;
+
+    LAPIC_write(LVT_TimerRegister, 32 | APIC_LVT_TIMER_MODE_PERIODIC);
+    LAPIC_write(DivideConfigurationRegisterForTimer, 0x3);
+    LAPIC_write(InitialCountRegisterForTimer, ticks_per_ms);
+
+    println("Timer initialized!");
+    print("Tick count: ");
+    println(unsigned_to_string(tick_count));
+}
+
+void APIC_IA32_base_setup(void)
+{
+    wrmsr(IA32_APIC_base, ~(1 << 10));
+    wrmsr(IA32_APIC_base, (1 << 11));
+    
+    asm volatile("mov %0, %%cr8" :: "r"(0ULL));
+}
 
 void APIC_setup(void)
 {
     APIC_disable_PIC();
-
+    APIC_IA32_base_setup();
     LAPIC_setup();
     HPET_setup();
+    LAPIC_timer_setup();
 }
 
 void _start(BootInfo boot_info)
