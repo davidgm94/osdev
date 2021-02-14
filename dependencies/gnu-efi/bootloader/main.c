@@ -306,10 +306,10 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         .rsdp = rsdp,
     };
 
-    void (*KernelStart)(BootInfo) = ((__attribute__((sysv_abi)) void(*)(BootInfo) ) header.e_entry);
+    void (*_start)(BootInfo*) = ((__attribute__((sysv_abi)) void(*)(BootInfo*) ) header.e_entry);
 
     SystemTable->BootServices->ExitBootServices(ImageHandle, MapKey);
-    KernelStart(boot_info);
+    _start(&boot_info);
 
 	return EFI_SUCCESS; // Exit the UEFI application
 }

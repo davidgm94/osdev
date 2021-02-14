@@ -2643,9 +2643,9 @@ void APIC_setup(void)
     LAPIC_timer_setup();
 }
 
-void _start(BootInfo boot_info)
+void _start(BootInfo* boot_info)
 {
-    kernel_init(boot_info);
+    kernel_init(*boot_info);
 
     while (true)
     {
