@@ -26,6 +26,7 @@ set(KERNEL_LINKER_SCRIPT ${KERNEL_DIR}/kernel.ld)
 add_executable(kernel.elf 
     ${KERNEL_DIR}/interrupts.c
     ${KERNEL_DIR}/gdt.nasm
+    ${KERNEL_DIR}/start.nasm
     ${KERNEL_DIR}/kernel.c
     )
 set_source_files_properties(${KERNEL_DIR}/interrupts.c PROPERTIES COMPILE_FLAGS -mgeneral-regs-only)

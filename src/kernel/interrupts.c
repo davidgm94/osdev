@@ -8,8 +8,37 @@ extern void putc(char);
 extern void clear_char(void);
 extern const char* unsigned_to_string(u64);
 extern const char* hex_to_string(u64);
+extern void println_hex(u64);
 
 void handle_keyboard(u8 scancode);
+
+typedef struct StackFrame
+{
+    struct StackFrame* rbp;
+    u64 rip;
+} StackFrame;
+
+void stacktrace(u32 max_frame_count)
+{
+    u32 frame = 0;
+    println("Stacktrace:");
+
+    void* frame_addresses[] = 
+    {
+        __builtin_frame_address(0),
+        __builtin_frame_address(1),
+        __builtin_frame_address(2),
+        __builtin_frame_address(3),
+        __builtin_frame_address(4),
+    };
+
+    for (u32 i = 0; i < array_length(frame_addresses); i++)
+    {
+        print(unsigned_to_string(i));
+        print(": ");
+        println_hex((u64)frame_addresses[i]);
+    }
+}
 
 enum
 {
@@ -69,6 +98,7 @@ INTERRUPT_HANDLER void double_fault_handler(struct InterruptFrame* frame)
 INTERRUPT_HANDLER void general_protection_fault_handler(struct InterruptFrame* frame)
 {
     panic("General protection fault detected");
+    stacktrace(3);
     for(;;);
 }
 

@@ -1716,7 +1716,6 @@ void ACPI_setup(BootInfo boot_info)
 
 void kernel_init(BootInfo boot_info)
 {
-
     renderer = (const Renderer)
     {
         .fb = boot_info.framebuffer,
@@ -2643,7 +2642,7 @@ void APIC_setup(void)
     LAPIC_timer_setup();
 }
 
-void _start(BootInfo* boot_info)
+void KernelMain(BootInfo* boot_info)
 {
     kernel_init(*boot_info);
 
