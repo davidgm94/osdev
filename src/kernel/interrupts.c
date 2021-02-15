@@ -9,6 +9,7 @@ extern void clear_char(void);
 extern const char* unsigned_to_string(u64);
 extern const char* hex_to_string(u64);
 extern void println_hex(u64);
+extern void print_hex(u64);
 
 void handle_keyboard(u8 scancode);
 
@@ -37,6 +38,25 @@ void stacktrace(u32 max_frame_count)
         print(unsigned_to_string(i));
         print(": ");
         println_hex((u64)frame_addresses[i]);
+    }
+}
+
+void stacktrace_asm(u32 max_frame_count)
+{
+    u64* rbp;
+    asm("movq %%rbp, %0;" : "=r"(rbp) ::);
+    println("Stacktrace");
+    println("==========");
+    u32 i = 0;
+    while (rbp)
+    {
+        u64 rip = *(rbp + 1);
+        u64 next_rbp = *(rbp + 0);
+        print("Call ");
+        print(unsigned_to_string(i++));
+        print(": ");
+        println_hex(rip);
+        rbp = (u64*)next_rbp;
     }
 }
 
@@ -98,7 +118,7 @@ INTERRUPT_HANDLER void double_fault_handler(struct InterruptFrame* frame)
 INTERRUPT_HANDLER void general_protection_fault_handler(struct InterruptFrame* frame)
 {
     panic("General protection fault detected");
-    stacktrace(3);
+    stacktrace_asm(10);
     for(;;);
 }
 

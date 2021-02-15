@@ -31,7 +31,7 @@ add_executable(kernel.elf
     )
 set_source_files_properties(${KERNEL_DIR}/interrupts.c PROPERTIES COMPILE_FLAGS -mgeneral-regs-only)
 target_include_directories(kernel.elf PRIVATE ${KERNEL_DIR})
-target_compile_options(kernel.elf PRIVATE -g -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector)
+target_compile_options(kernel.elf PRIVATE -g -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -fno-omit-frame-pointer)
 target_link_options(kernel.elf PRIVATE -static -Bsymbolic -nostdlib -T ${KERNEL_LINKER_SCRIPT})
 
 set(NSH_SCRIPT ${KERNEL_DIR}/startup.nsh)
