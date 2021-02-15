@@ -6,8 +6,8 @@ run:
 	make -C build run
 
 build:
-	make -C build
+	make -C image
 gen:
-	rm -rf build && mkdir build && pushd build && cmake .. && cp compile_commands.json .. && popd
+	rm -rf build && mkdir build && cd build && cmake .. && cp compile_commands.json .. && cd ..
 bootloader:
 	make -C dependencies/gnu-efi && make -C dependencies/gnu-efi bootloader

@@ -65,7 +65,7 @@ typedef enum QWERTY_ES_ASCII_Table_Index
     Key_K    = 37,
     Key_L    = 38,
     Key_N    = 39, // @tricky
-    Key_Ç    = 41,
+    KEY_CEDILLA = 41,
     Key_LeftShift = 42,
     Key_LessThan = 43,
     Key_Z    = 44,
