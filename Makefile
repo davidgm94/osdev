@@ -4,9 +4,11 @@ rebuild: gen build
 
 run:
 	make -C build run
+debug:
+	make -C build debug
 
 build:
-	make -C image
+	make -C build image
 gen:
 	rm -rf build && mkdir build && cd build && cmake .. && cp compile_commands.json .. && cd ..
 bootloader:

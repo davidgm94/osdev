@@ -2,14 +2,10 @@
 #include "asm.h"
 
 extern void panic(const char*);
-extern void println(const char*);
-extern void print(const char*);
+extern s32 println(const char*, ...);
+extern void print(const char*, ...);
 extern void putc(char);
 extern void clear_char(void);
-extern const char* unsigned_to_string(u64);
-extern const char* hex_to_string(u64);
-extern void println_hex(u64);
-extern void print_hex(u64);
 
 void handle_keyboard(u8 scancode);
 
@@ -35,9 +31,7 @@ void stacktrace(u32 max_frame_count)
 
     for (u32 i = 0; i < array_length(frame_addresses); i++)
     {
-        print(unsigned_to_string(i));
-        print(": ");
-        println_hex((u64)frame_addresses[i]);
+        println("%32u: %64h", i, (u64)frame_addresses[i]);
     }
 }
 
@@ -52,10 +46,7 @@ void stacktrace_asm(u32 max_frame_count)
     {
         u64 rip = *(rbp + 1);
         u64 next_rbp = *(rbp + 0);
-        print("Call ");
-        print(unsigned_to_string(i++));
-        print(": ");
-        println_hex(rip);
+        println("Call %32u: %64h", i++, rip);
         rbp = (u64*)next_rbp;
     }
 }
@@ -83,8 +74,7 @@ static inline bool KeyboardBitmap_get_value(KeyboardBitmap keymap, u64 index)
         return (keymap.values & index) >> index;
     }
 
-    print("Wrong value for key: ");
-    println(unsigned_to_string(index));
+    println("Wrong value for key: %64u", index);
     loop_forever();
     return false;
 }

@@ -1,0 +1,6 @@
+[PRINTF]
+
+* Allow random byte number for the format specifier: 0 <= i <= 64 | i == format specifier number (round up to the nearest greater type size). This also can be used for floats. Proposed format specifier for string: "%*c"
+
+[INTERRUPTS, STACKTRACE]
+* Switch to ASM interrupt handling instead of GCC attribute (might be causing stack corruption)

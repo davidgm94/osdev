@@ -10,7 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_COMPILER gcc)
 set(CMAKE_LINKER ld)
 set(CMAKE_STATIC_LINKER_FLAGS rDv)
-set(CMAKE_ASM_NASM_COMPILE_OBJECT "<CMAKE_ASM_NASM_COMPILER> <INCLUDES> -f ${CMAKE_ASM_NASM_OBJECT_FORMAT} -o <OBJECT> <SOURCE>")
+set(CMAKE_ASM_NASM_COMPILE_OBJECT "<CMAKE_ASM_NASM_COMPILER> <INCLUDES> -f ${CMAKE_ASM_NASM_OBJECT_FORMAT} -g -F dwarf -o <OBJECT> <SOURCE>")
 
 set(DEPENDENCIES_DIR ${CMAKE_SOURCE_DIR}/dependencies)
 set(GNU_EFI_DIR ${DEPENDENCIES_DIR}/gnu-efi)
@@ -31,7 +31,7 @@ add_executable(kernel.elf
     )
 set_source_files_properties(${KERNEL_DIR}/interrupts.c PROPERTIES COMPILE_FLAGS -mgeneral-regs-only)
 target_include_directories(kernel.elf PRIVATE ${KERNEL_DIR})
-target_compile_options(kernel.elf PRIVATE -g -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -fno-omit-frame-pointer)
+target_compile_options(kernel.elf PRIVATE -g3 -ggdb -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -fno-omit-frame-pointer)
 target_link_options(kernel.elf PRIVATE -static -Bsymbolic -nostdlib -T ${KERNEL_LINKER_SCRIPT})
 
 set(NSH_SCRIPT ${KERNEL_DIR}/startup.nsh)
@@ -44,7 +44,7 @@ add_custom_target(run
     COMMAND qemu-system-x86_64 -machine q35 -drive file=${PROJECT_NAME}.img -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="${OVMF_DIR}/OVMF_CODE-pure-efi.fd",readonly=on -drive if=pflash,format=raw,unit=1,file="${OVMF_DIR}/OVMF_VARS-pure-efi.fd" -net none
     DEPENDS image)
 add_custom_target(debug
-    COMMAND qemu-system-x86_64 -machine q35 -drive file=${PROJECT_NAME}.img -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="${OVMF_DIR}/OVMF_CODE-pure-efi.fd",readonly=on -drive if=pflash,format=raw,unit=1,file="${OVMF_DIR}/OVMF_VARS-pure-efi.fd" -net none -s
+    COMMAND qemu-system-x86_64 -machine q35 -drive file=${PROJECT_NAME}.img -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="${OVMF_DIR}/OVMF_CODE-pure-efi.fd",readonly=on -drive if=pflash,format=raw,unit=1,file="${OVMF_DIR}/OVMF_VARS-pure-efi.fd" -net none -s -S
     DEPENDS image)
 
 add_custom_command(TARGET kernel.elf

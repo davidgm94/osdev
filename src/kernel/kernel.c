@@ -2,6 +2,8 @@
 #include "asm.h"
 #include "interrupts.h"
 
+#define APIC 0
+
 u64 i = 0;
 
 typedef struct Framebuffer
@@ -550,11 +552,6 @@ static IDTR idtr;
 
 static Renderer renderer = {0};
 
-static char signed_to_string_output[128];
-static char unsigned_to_string_output[128];
-static char float_to_string_output[128];
-static char hex_to_string_output[128];
-
 static PageTable* PML4; 
 static BitMap page_map;
 static u64 free_memory;
@@ -785,179 +782,6 @@ void* memcpy(void* dst, const void* src, usize bytes)
     return dst;
 }
 
-const char* unsigned_to_string(u64 value)
-{
-    u8 digit_count;
-    u64 it = value;
-    
-    while (it / 10 > 0)
-    {
-        it /= 10;
-        digit_count++;
-    }
-
-    u8 index = 0;
-
-    while (value / 10 > 0)
-    {
-        u8 remainder = value % 10;
-        value /= 10;
-        unsigned_to_string_output[digit_count - index] = remainder + '0';
-        index++;
-    }
-
-    u8 remainder = value % 10;
-    unsigned_to_string_output[digit_count - index] = remainder + '0';
-    unsigned_to_string_output[digit_count + 1] = 0;
-
-    return unsigned_to_string_output;
-}
-
-const char* signed_to_string(s64 value)
-{
-    u8 is_negative = value < 0;
-    if (is_negative)
-    {
-        value *= is_negative ? -1 : 1;
-        signed_to_string_output[0] = '-';
-    }
-
-    u8 digit_count;
-    u64 it = value;
-    
-    while (it / 10 > 0)
-    {
-        it /= 10;
-        digit_count++;
-    }
-
-    u8 index = 0;
-
-    while (value / 10 > 0)
-    {
-        u8 remainder = value % 10;
-        value /= 10;
-        signed_to_string_output[is_negative + digit_count - index] = remainder + '0';
-        index++;
-    }
-
-    u8 remainder = value % 10;
-    signed_to_string_output[is_negative + digit_count - index] = remainder + '0';
-    signed_to_string_output[is_negative + digit_count + 1] = 0;
-
-    return signed_to_string_output;
-}
-
-const char* float_to_string(f64 value, u8 decimal_digits)
-{
-    if (decimal_digits > 20)
-    {
-        decimal_digits = 20;
-    }
-
-    char* int_ptr = (char*)signed_to_string((s64)value);
-    char* float_ptr = float_to_string_output;
-
-    if (value < 0)
-    {
-        value *= -1;
-    }
-
-
-    while (*int_ptr)
-    {
-        *float_ptr++ = *int_ptr++;
-    }
-
-    *float_ptr++ = '.';
-
-    f64 new_value = value - (s64)value;
-
-    for (u8 i = 0; i < decimal_digits; i++)
-    {
-        new_value *= 10;
-        *float_ptr++ = (s64)new_value + '0';
-        new_value -= (s64)new_value;
-    }
-    *float_ptr = 0;
-
-    return float_to_string_output;
-}
-
-const char* hex_to_string_bytes(u64 value, u8 bytes_to_print)
-{
-    u8 digits = bytes_to_print * 2 - 1;
-    
-    for (u8 i = 0; i < digits; i++)
-    {
-        u8* ptr = ((u8*)&value + i);
-
-        u8 tmp = ((*ptr & 0xF0) >> 4);
-        hex_to_string_output[(digits - (i * 2 + 1))] = tmp + (tmp > 9 ? 55 : '0');
-
-        tmp = (*ptr) & 0x0F;
-        hex_to_string_output[(digits - (i * 2))] = tmp + (tmp > 9 ? 55 : '0');
-    }
-
-    hex_to_string_output[(digits + 1)] = 0;
-
-
-    return hex_to_string_output;
-}
-
-const char* hex_to_string(u64 value)
-{
-    u8 bytes_to_print;
-    if (value <= UINT8_MAX)
-    {
-        bytes_to_print = sizeof(u8);
-    }
-    else if (value <= UINT16_MAX)
-    {
-        bytes_to_print = sizeof(u16);
-    }
-    else if (value <= UINT32_MAX)
-    {
-        bytes_to_print = sizeof(u32);
-    }
-    else if (value <= UINT64_MAX)
-    {
-        bytes_to_print = sizeof(u64);
-    }
-
-    return hex_to_string_bytes(value, bytes_to_print);
-}
-
-const char* hex_to_string_u8(u8 value)
-{
-    return hex_to_string_bytes(value, sizeof(u8));
-}
-const char* hex_to_string_u16(u16 value)
-{
-    return hex_to_string_bytes(value, sizeof(u16));
-}
-const char* hex_to_string_u32(u32 value)
-{
-    return hex_to_string_bytes(value, sizeof(u32));
-}
-const char* hex_to_string_u64(u64 value)
-{
-    return hex_to_string_bytes(value, sizeof(u64));
-}
-
-void print(const char*);
-void println(const char*);
-void print_hex(u64 value)
-{
-    print("0x");
-    print(hex_to_string(value));
-}
-void println_hex(u64 value)
-{
-    print("0x");
-    println(hex_to_string(value));
-}
-
 void scroll(Renderer* renderer)
 {
     Framebuffer* fb = renderer->fb;
@@ -1033,30 +857,11 @@ void render_char(Renderer* renderer, char c, u32 xo, u32 yo)
     }
 }
 
-void print_ex(Renderer* renderer, const char* str)
-{
-    if (str)
-    {
-        while (*str)
-        {
-            render_char(renderer, *str, renderer->cursor_position.x, renderer->cursor_position.y);
-            handle_newline_while_printing(renderer);
-            str++;
-        }
-    }
-    else
-    {
-        print_ex(renderer, "(null)");
-    }
-}
-
 void putc(char c)
 {
     render_char(&renderer, c, renderer.cursor_position.x, renderer.cursor_position.y);
     handle_newline_while_printing(&renderer);
 }
-
-const char* unsigned_to_string(u64);
 
 void put_pixel(s64 x, s64 y, Color color)
 {
@@ -1072,19 +877,6 @@ void put_char_in_point(char c, u32 xo, u32 yo)
 {
     render_char(&renderer, c, xo, yo);
 }
-
-void print(const char* str)
-{
-    print_ex(&renderer, str);
-}
-
-
-void println(const char* str)
-{
-    print(str);
-    new_line();
-}
-
 
 void fb_clear(void)
 {
@@ -1139,6 +931,557 @@ void clear_char(void)
             renderer.cursor_position.y = 0;
         }
     }
+}
+
+void unsigned_to_string_vprintf(u64 value, char* buffer)
+{
+    u8 digit_count = 0;
+    u64 it = value;
+    
+    while (it / 10 > 0)
+    {
+        it /= 10;
+        digit_count++;
+    }
+
+    u8 index = 0;
+
+    while (value / 10 > 0)
+    {
+        u8 remainder = value % 10;
+        value /= 10;
+        buffer[digit_count - index] = remainder + '0';
+        index++;
+    }
+
+    u8 remainder = value % 10;
+    buffer[digit_count - index] = remainder + '0';
+    buffer[digit_count + 1] = 0;
+}
+
+void signed_to_string_vprintf(s64 value, char* buffer)
+{
+    u8 is_negative = value < 0;
+    if (is_negative)
+    {
+        value *= is_negative ? -1 : 1;
+        buffer[0] = '-';
+    }
+
+    u8 digit_count = 0;
+    u64 it = value;
+    
+    while (it / 10 > 0)
+    {
+        it /= 10;
+        digit_count++;
+    }
+
+    u8 index = 0;
+
+    while (value / 10 > 0)
+    {
+        u8 remainder = value % 10;
+        value /= 10;
+        buffer[is_negative + digit_count - index] = remainder + '0';
+        index++;
+    }
+
+    u8 remainder = value % 10;
+    buffer[is_negative + digit_count - index] = remainder + '0';
+    buffer[is_negative + digit_count + 1] = 0;
+}
+
+void hex_to_string_bytes_vprintf(u64 value, u8 bytes_to_print, char* buffer)
+{
+    char aux_buffer[256];
+
+    u32 digit_count = 0;
+
+    if (value)
+    {
+        while (value)
+        {
+            u64 remainder = value % 16;
+
+            aux_buffer[digit_count++] = remainder + 48 + (7 * (remainder > 10));
+            value /= 16;
+        }
+    }
+    else
+    {
+        aux_buffer[digit_count++] = '0';
+    }
+
+    u32 prefix = 0;
+    buffer[prefix++] = '0';
+    buffer[prefix++] = 'x';
+    u8 digits_demanded = bytes_to_print * 2;
+    u8 zero_to_write_count = digits_demanded - digit_count;
+
+    for (u32 i = 0; i < zero_to_write_count; i++)
+    {
+        buffer[prefix++] = '0';
+    }
+
+    char* ptr = buffer + prefix;
+
+    for (s32 i = digit_count - 1, real_i = 0; i >= 0; i--, real_i++)
+    {
+        ptr[real_i] = aux_buffer[i];
+    }
+    ptr[digit_count] = 0;
+}
+
+void hex_to_string_u8_vprintf(u8 value, char* buffer)
+{
+    return hex_to_string_bytes_vprintf(value, sizeof(u8), buffer);
+}
+void hex_to_string_u16_vprintf(u16 value, char* buffer)
+{
+    return hex_to_string_bytes_vprintf(value, sizeof(u16), buffer);
+}
+void hex_to_string_u32_vprintf(u32 value, char* buffer)
+{
+    return hex_to_string_bytes_vprintf(value, sizeof(u32), buffer);
+}
+void hex_to_string_u64_vprintf(u64 value, char* buffer)
+{
+    return hex_to_string_bytes_vprintf(value, sizeof(u64), buffer);
+}
+
+void float_to_string_vprintf(f64 value, u8 decimal_digits, char* buffer)
+{
+    if (decimal_digits > 20)
+    {
+        decimal_digits = 20;
+    }
+
+    char signed_buffer[128];
+    signed_to_string_vprintf((s64)value, signed_buffer);
+
+    if (value < 0)
+    {
+        value *= -1;
+    }
+
+    char* int_ptr = signed_buffer;
+    char* float_ptr = buffer;
+
+    while (*int_ptr)
+    {
+        *float_ptr++ = *int_ptr++;
+    }
+
+    *float_ptr++ = '.';
+
+    f64 new_value = value - (s64)value;
+
+    for (u8 i = 0; i < decimal_digits; i++)
+    {
+        new_value *= 10;
+        *float_ptr++ = (s64)new_value + '0';
+        new_value -= (s64)new_value;
+    }
+
+    *float_ptr = 0;
+}
+
+typedef enum FormattingMode
+{
+    Error = 0,
+    String,
+    SignedInteger8,
+    SignedInteger16,
+    SignedInteger32,
+    SignedInteger64,
+    UnsignedInteger8,
+    UnsignedInteger16,
+    UnsignedInteger32,
+    UnsignedInteger64,
+    Hexadecimal8,
+    Hexadecimal16,
+    Hexadecimal32,
+    Hexadecimal64,
+    Binary8,
+    Binary16,
+    Binary32,
+    Binary64,
+    Float,
+    Char,
+    Bool,
+} FormattingMode;
+
+const FormattingMode format_modes8[] =
+{
+    SignedInteger8, UnsignedInteger8, Hexadecimal8, Binary8,
+};
+
+const FormattingMode format_modes16[] =
+{
+    SignedInteger16, UnsignedInteger16, Hexadecimal16, Binary16,
+};
+const FormattingMode format_modes32[] =
+{
+    SignedInteger32, UnsignedInteger32, Hexadecimal32, Binary32,
+};
+const FormattingMode format_modes64[] =
+{
+    SignedInteger64, UnsignedInteger64, Hexadecimal64, Binary64,
+};
+
+static inline FormattingMode find_formatting_mode_internal(char c, const FormattingMode* allowed, usize allowed_count)
+{
+    FormattingMode bot_format_mode = 0;
+    FormattingMode top_format_mode = 0;
+
+    switch (c)
+    {
+        case 's':
+            bot_format_mode = SignedInteger8;
+            top_format_mode = SignedInteger64;
+            break;
+        case 'u':
+            bot_format_mode = UnsignedInteger8;
+            top_format_mode = UnsignedInteger64;
+            break;
+        case 'h':
+            bot_format_mode = Hexadecimal8;
+            top_format_mode = Hexadecimal64;
+            break;
+        case 'b':
+            bot_format_mode = Binary8;
+            top_format_mode = Binary64;
+            break;
+        default:
+            return Error;
+    }
+
+    for (u32 format = bot_format_mode; format <= top_format_mode; format++)
+    {
+        for (u32 i = 0; i < allowed_count; i++)
+        {
+            if (allowed[i] == format)
+            {
+                return format;
+            }
+        }
+    }
+
+    return Error;
+}
+
+FormattingMode find_formatting_mode(const char *str, u32 i)
+{
+    FormattingMode mode;
+    char next_char = str[i + 1];
+    switch (next_char)
+    {
+        case '8':
+        {
+            return find_formatting_mode_internal(str[i + 2], format_modes8, array_length(format_modes8));
+        }
+        case '1':
+        {
+            if (str[i + 2] == '6')
+            {
+                return find_formatting_mode_internal(str[i + 3], format_modes16, array_length(format_modes16));
+            }
+
+            break;
+        }
+        case '3':
+        {
+            if (str[i + 2] == '2')
+            {
+                return find_formatting_mode_internal(str[i + 3], format_modes32, array_length(format_modes32));
+            }
+
+            break;
+        }
+        case '6':
+        {
+            if (str[i + 2] == '4')
+            {
+                return find_formatting_mode_internal(str[i + 3], format_modes64, array_length(format_modes64));
+            }
+
+            break;
+        }
+        case 's':
+        {
+            return String;
+        }
+        case 'f':
+        {
+            return Float;
+        }
+        case 'c':
+        {
+            return Char;
+        }
+        case 'b':
+        {
+            return Bool;
+        }
+        default:
+            break;
+    }
+
+    return Error;
+}
+
+
+void panic(const char*, ...);
+s32 println(const char*, ...);
+s32 print(const char*, ...);
+s32 vprint(const char*, va_list list);
+
+#define assert(x) _assert(x, #x)
+void _assert(bool condition, const char* condition_name)
+{
+    if (!condition)
+    {
+        panic(condition_name);
+    }
+}
+
+void panic(const char* format, ...)
+{
+    renderer.clear_color = Color_Red;
+    fb_clear();
+    renderer.cursor_position = (Point){0};
+    renderer.color = Color_Black;
+    println("Kernel panic");
+    new_line();
+    va_list list;
+    va_start(list, format);
+    (void)vprint(format, list);
+    va_end(list);
+    new_line();
+}
+
+s32 vprint(const char* format, va_list list)
+{
+    char buffer[128];
+    s32 char_count = 0;
+
+    for (u32 i = 0; format[i]; i++)
+    {
+        char c = format[i];
+        bool formatting_mode = c == '%';
+
+        switch (c)
+        {
+            case '%':
+                {
+                    FormattingMode mode;
+                    if (format[i + 1])
+                    {
+                        mode = find_formatting_mode(format, i);
+                    }
+                    else
+                    {
+                        mode = Error;
+                    }
+
+                    if (mode) // No error
+                    {
+                        char* write_here = buffer;
+                        switch (mode)
+                        {
+                            case String:
+                                {
+                                    i++;
+                                    write_here = va_arg(list, char*);
+                                    break;
+                                }
+                            case UnsignedInteger8:
+                                {
+                                    i += 2;
+                                    u8 value = (u8)va_arg(list, u32);
+                                    unsigned_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case UnsignedInteger16:
+                                {
+                                    i += 3;
+                                    u16 value = (u16)va_arg(list, u32);
+                                    unsigned_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case UnsignedInteger32:
+                                {
+                                    i += 3;
+                                    u32 value = (u32)va_arg(list, u32);
+                                    unsigned_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case UnsignedInteger64:
+                                {
+                                    i += 3;
+                                    u64 value = (u64)va_arg(list, u64);
+                                    unsigned_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case SignedInteger8:
+                                {
+                                    i += 2;
+                                    s8 value = (s8)va_arg(list, s32);
+                                    signed_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case SignedInteger16:
+                                {
+                                    i += 3;
+                                    s16 value = (s16)va_arg(list, s32);
+                                    signed_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case SignedInteger32:
+                                {
+                                    i += 3;
+                                    s32 value = (s32)va_arg(list, s32);
+                                    signed_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case SignedInteger64:
+                                {
+                                    i += 3;
+                                    s64 value = (s64)va_arg(list, s64);
+                                    signed_to_string_vprintf(value, write_here);
+                                    break;
+                                }
+                            case Hexadecimal8:
+                                {
+                                    i += 2;
+                                    u8 value = (u8)va_arg(list, u32);
+                                    hex_to_string_u8_vprintf(value, write_here);
+                                    break;
+                                }
+                            case Hexadecimal16:
+                                {
+                                    i += 3;
+                                    u16 value = (u16)va_arg(list, u32);
+                                    hex_to_string_u16_vprintf(value, write_here);
+                                    break;
+                                }
+                            case Hexadecimal32:
+                                {
+                                    i += 3;
+                                    u32 value = (u32)va_arg(list, u32);
+                                    hex_to_string_u32_vprintf(value, write_here);
+                                    break;
+                                }
+                            case Hexadecimal64:
+                                {
+                                    i += 3;
+                                    u64 value = (u64)va_arg(list, u64);
+                                    hex_to_string_u64_vprintf(value, write_here);
+                                    break;
+                                }
+                            case Binary8: case Binary16: case Binary32: case Binary64:
+                                {
+                                    // @TODO: implement
+                                    break;
+                                }
+                            case Float:
+                                {
+                                    i++;
+                                    f64 value = va_arg(list, f64);
+                                    float_to_string_vprintf(value, 5, write_here);
+                                    break;
+                                }
+                            case Char:
+                                {
+                                    i++;
+                                    char value = (char)va_arg(list, u32);
+                                    write_here[0] = value;
+                                    write_here[1] = 0;
+                                    break;
+                                }
+                            case Bool:
+                                {
+                                    i++;
+                                    bool value = (bool)va_arg(list, u32);
+                                    if (value)
+                                    {
+                                        write_here[0] = 't';
+                                        write_here[1] = 'r';
+                                        write_here[2] = 'u';
+                                        write_here[3] = 'e';
+                                        write_here[4] = '\0';
+                                    }
+                                    else
+                                    {
+                                        write_here[0] = 'f';
+                                        write_here[1] = 'a';
+                                        write_here[2] = 'l';
+                                        write_here[3] = 's';
+                                        write_here[4] = 'e';
+                                        write_here[5] = '\0';
+                                    }
+                                }
+                            default:
+                                break;
+                        }
+
+                        char c;
+                        for (u32 i = 0; (c = write_here[i]); i++)
+                        {
+                            putc(c);
+                            char_count++;
+                        }
+                    }
+                    else
+                    {
+error:
+                        assert("This is an error" && false);
+                        return char_count;
+                    }
+                }
+                break;
+            case '\t':
+                putc(' ');
+                char_count++;
+                while (char_count % 4 != 0)
+                {
+                    putc(' ');
+                    char_count++;
+                }
+                break;
+            case '\n':
+                new_line();
+                char_count++;
+                break;
+            default:
+                putc(c);
+                char_count++;
+                break;
+        }
+    }
+
+    return char_count;
+}
+
+s32 print(const char* format, ...)
+{
+    va_list list;
+    va_start(list, format);
+    s32 written_char_count = vprint(format, list);
+    va_end(list);
+    return written_char_count;
+
+}
+
+s32 println(const char* format, ...)
+{
+    va_list list;
+    va_start(list, format);
+    s32 written_char_count = vprint(format, list);
+    va_end(list);
+    new_line();
+    return written_char_count + 1;
 }
 
 static inline EfiMemoryDescriptor* get_descriptor(EFIMmap mmap, u64 index)
@@ -1346,28 +1689,12 @@ u64 get_reserved_RAM(void)
 
 void print_memory_usage(void)
 {
-    print("Free RAM: ");
-    print(unsigned_to_string(get_free_RAM() / 1024));
-    print(" KB");
-    new_line();
-    print("Used RAM: ");
-    print(unsigned_to_string(get_used_RAM() / 1024));
-    print(" KB");
-    new_line();
-    print("Reserved RAM: ");
-    print(unsigned_to_string(get_reserved_RAM() / 1024));
-    print(" KB");
-    new_line();
-    print("Kernel start address: ");
-    print(hex_to_string(_KernelStart));
-    new_line();
-    print("Kernel end address:   ");
-    print(hex_to_string(_KernelEnd));
-    new_line();
-    print("Kernel size: ");
-    print(unsigned_to_string(kernel_size / 1024));
-    print(" KB");
-    new_line();
+    println("Free RAM: %64u KB", get_free_RAM() / 1024);
+    println("Used RAM: %64u KB", get_used_RAM() / 1024);
+    println("Reserved RAM: %64u KB", get_reserved_RAM() / 1024);
+    println("Kernel start address: %64h", _KernelStart);
+    println("Kernel end address:   %64h", _KernelEnd);
+    println("Kernel size: %64u KB", kernel_size / 1024);
 }
 
 void memmap(void* virtual_memory, void* physical_memory)
@@ -1481,6 +1808,10 @@ void interrupts_setup(void)
     IDT_gate_new(mouse_handler, 0x2C, IDT_TA_InterruptGate, 0x08);
 
     IDT_load();
+#if APIC == 0
+    PIC_remap();
+    interrupts_enable();
+#endif
 }
 
 void memory_setup(BootInfo boot_info)
@@ -1515,16 +1846,6 @@ void memory_setup(BootInfo boot_info)
     asm volatile("mov %0, %%cr3" : : "r" (PML4));
 }
 
-void panic(const char* message)
-{
-    renderer.clear_color = Color_Red;
-    fb_clear();
-    renderer.cursor_position = (Point){0};
-    renderer.color = Color_Black;
-    println("Kernel panic");
-    new_line();
-    println(message);
-}
 
 void reset_terminal(void);
 void ACPI_setup(BootInfo boot_info);
@@ -1536,8 +1857,7 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
     LAPIC_address = MADT_header->LAPIC_address;
     bool LAPIC_address_override = false;
     bool dual_legacy_PICS_installed = (MADT_header->flags & 0x01) == 1;
-    print("Dual legacy PICS installed: ");
-    println(dual_legacy_PICS_installed? "true" : "false");
+    println("Dual legacy PICS installed: %b", dual_legacy_PICS_installed);
     u32 length = MADT_header->header.length;
     ACPI_MADT_EntryHeader* end_of_MADT = (ACPI_MADT_EntryHeader*) ((u64)MADT_header + length);
 
@@ -1558,12 +1878,9 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
                 u32 flags = lapic->flags;
 
                 println("MADT LAPIC entry:");
-                print("* ACPI processor ID: ");
-                println(unsigned_to_string(processor_id));
-                print("* APIC ID: ");
-                println(unsigned_to_string(APIC_id));
-                print("* Flags: ");
-                println(unsigned_to_string(flags));
+                println("* ACPI processor ID: %8u", processor_id);
+                println("* APIC ID: %8u", APIC_id);
+                println("* Flags: %32h", flags);
 
                 break;
             }
@@ -1575,12 +1892,9 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
                 u32 gsi = ioapic->global_system_interrupt_base;
 
                 println("MADT IO APIC entry:");
-                print("* APIC ID: ");
-                println(unsigned_to_string(id));
-                print("* Address: ");
-                println_hex(address);
-                print("* Global System Interrupt base: ");
-                println_hex(gsi);
+                println("* APIC ID: %8u", id);
+                println("* Address: %32h", address);
+                println("* Global System Interrupt base: %32h", gsi);
 
                 break;
             }
@@ -1593,14 +1907,10 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
                 u16 flags = iso->flags;
 
                 println("MADT Interrupt Source Override entry:");
-                print("* Bus source: ");
-                println(unsigned_to_string(bus_source));
-                print("* IRQ source: ");
-                println(unsigned_to_string(IRQ_source));
-                print("* Global System Interrupt base: ");
-                println_hex(gsi);
-                print("* Flags: ");
-                println_hex(flags);
+                println("* Bus source: %8u", bus_source);
+                println("* IRQ source: %8u", IRQ_source);
+                println("* Global System Interrupt base: %32h", gsi);
+                println("* Flags: %16h", flags);
 
                 break;
             }
@@ -1612,12 +1922,9 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
                 u8 LINT = nmi->LINT;
 
                 println("MADT Non-Maskable Interrupts entry:");
-                print("* ACPI processor ID: ");
-                println(unsigned_to_string(id));
-                print("* Flags: ");
-                println(unsigned_to_string(flags));
-                print("* LINT: ");
-                println(unsigned_to_string(LINT));
+                println("* ACPI processor ID: %8u", id);
+                println("* Flags: %16h", flags);
+                println("* LINT: %8u", LINT);
                 break;
             }
             case MADT_EntryType_LAPIC_AddressOverride:
@@ -1626,8 +1933,7 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
                 u64 address = lapic_ao->LAPIC_physical_address;
 
                 println("MADT LAPIC Address Override entry:");
-                print("LAPIC physical address: ");
-                println_hex(address);
+                println("LAPIC physical address: %64h", address);
                 LAPIC_address_override = true;
                 LAPIC_address = address;
 
@@ -1639,15 +1945,8 @@ void MADT_explore(ACPI_MADT_Header* MADT_header)
         }
     }
 
-    print("Local APIC address: ");
-    print_hex(LAPIC_address);
-    print(" (override: ");
-    println(LAPIC_address_override? "true)" : "false)");
-
-    print("MADT entry count: ");
-    println(unsigned_to_string(entry_count));
-    new_line();
-
+    println("Local APIC address: %64h (override %b)", LAPIC_address, LAPIC_address_override);
+    println("MADT entry count: %32u\n", entry_count);
 }
 
 void HPET_explore(ACPI_HPET_Header* HPET_header)
@@ -1691,24 +1990,24 @@ void ACPI_setup(BootInfo boot_info)
     /*PCI_enumerate((ACPI_MCFG_Header*)MCFG_header);*/
 
     ACPI_SDT_Header* MADT_header = ACPI_find_table(xsdt_header, "APIC");
-    if (MADT_header)
-    {
-        println("Found MADT");
-    }
-    else
-    {
-        panic("MADT not found");
-    }
+    /*if (MADT_header)*/
+    /*{*/
+        /*println("Found MADT");*/
+    /*}*/
+    /*else*/
+    /*{*/
+        /*panic("MADT not found");*/
+    /*}*/
 
     ACPI_SDT_Header* HPET_header = ACPI_find_table(xsdt_header, "HPET");
-    if (HPET_header)
-    {
-        println("Found HPET");
-    }
-    else
-    {
-        println("HPET not found");
-    }
+    /*if (HPET_header)*/
+    /*{*/
+        /*println("Found HPET");*/
+    /*}*/
+    /*else*/
+    /*{*/
+        /*println("HPET not found");*/
+    /*}*/
 
     MADT_explore((ACPI_MADT_Header*) MADT_header);
     HPET_explore((ACPI_HPET_Header*) HPET_header);
@@ -1726,23 +2025,23 @@ void kernel_init(BootInfo boot_info)
     };
 
     memory_setup(boot_info);
-
     fb_clear();
+
     interrupts_setup();
-    ACPI_setup(boot_info);
     load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
+
+#if APIC
+    ACPI_setup(boot_info);
     APIC_setup();
+#endif
 
     PS2_mouse_init();
-
-
 
     outb(PIC1_DATA, 0b11111001);
     outb(PIC2_DATA, 0b11101111);
 
     println("Hello UEFI x86_64 kernel!");
     print_memory_usage();
-    //println(hex_to_string((u64)boot_info.rsdp));
 
     reset_terminal();
 }
@@ -2172,6 +2471,11 @@ void cmd_memdump(Command* cmd)
     u64 mem = string_to_unsigned(cmd->args[0]);
     u64 bytes = string_to_unsigned(cmd->args[1]);
 
+    if (mem == 0 || bytes == 0)
+    {
+        println("Wrong usage");
+    }
+
     u8* it = (u8*)mem;
 
     u8 divide_every = 4;
@@ -2179,9 +2483,9 @@ void cmd_memdump(Command* cmd)
     for (u64 i = 0; i < bytes; i++)
     {
         u8* ptr = it + i;
-        print(hex_to_string((u64)ptr));
-        print(": ");
-        print(hex_to_string(*ptr));
+
+        print("%64h: %8h", (u64)ptr, *ptr);
+
         bool end_of_line = ((i > 0 && i % divide_every == 0) || i == bytes - 1);
         if (end_of_line)
         {
@@ -2215,21 +2519,14 @@ void ACPI_print_tables(ACPI_SDT_Header* xsdt_header)
     // Point to the end of the header (the beginning of the tables
     u64* pointer_table = (u64*)(xsdt_header + 1);
 
-    print("ACPI tables: ");
-    println(unsigned_to_string(table_count));
+    println("ACPI tables: %32u", table_count);
     for (u32 i = 0; i < table_count; i++)
     {
-        print("Table ");
-        print(unsigned_to_string(i));
-        print(": ");
         ACPI_SDT_Header* table_header = (ACPI_SDT_Header*) pointer_table[i];
-        for (u32 c = 0; c < sizeof(table_header->signature); c++)
-        {
-            putc(table_header->signature[c]);
-        }
-        print(" @");
-        print_hex((u64)table_header);
-        new_line();
+        char* signature = table_header->signature;
+        println("Table %32u: %c%c%c%c @%64h", i,
+                signature[0], signature[1], signature[2], signature[3],
+                (u64)table_header);
     }
 }
 
@@ -2264,10 +2561,7 @@ void PCI_enumerate_function(u64 device_address, u64 function)
         return;
     }
 
-    print("Device ID: ");
-    print(hex_to_string(pci_device_header->device_ID));
-    print(". Vendor ID: ");
-    println(hex_to_string(pci_device_header->vendor_ID));
+    println("Device ID: %16u. Vendor ID: %16u.", pci_device_header->device_ID, pci_device_header->vendor_ID);
 }
 
 void PCI_enumerate_device(u64 bus_address, u64 device)
@@ -2314,8 +2608,7 @@ void PCI_enumerate(ACPI_MCFG_Header* mcfg_header)
     new_line();
 
     u32 mcfg_entries = (mcfg_header->header.length - sizeof(ACPI_MCFG_Header)) / sizeof(ACPI_DeviceConfig);
-    print("MCFG entries: ");
-    println(unsigned_to_string(mcfg_entries));
+    println("MCFG entries: %32u", mcfg_entries);
     println("Listing PCI devices:");
 
     ACPI_DeviceConfig* device_config_array = (ACPI_DeviceConfig*)(mcfg_header + 1);
@@ -2453,15 +2746,7 @@ void PIT_sleep(void)
     while (!(inb(0x61) & 0x20));
 }
 
-#define assert(x) _assert(x, #x)
 
-void _assert(bool condition, const char* condition_name)
-{
-    if (!condition)
-    {
-        panic(condition_name);
-    }
-}
 
 typedef enum LAPICRegister
 {
@@ -2569,9 +2854,7 @@ void HPET_setup(void)
 
     if (((cnf_reg & 1) == 1))
     {
-        print("HPET initialized! Frequency: ");
-        print(unsigned_to_string(HPET_frequency));
-        println(" femtoseconds");
+        println("HPET initialized! Frequency: %64u femtoseconds", HPET_frequency);
     }
     else
     {
@@ -2620,9 +2903,7 @@ void LAPIC_timer_setup(void)
     LAPIC_write(DivideConfigurationRegisterForTimer, 0x3);
     LAPIC_write(InitialCountRegisterForTimer, ticks_per_ms);
 
-    println("Timer initialized!");
-    print("Tick count: ");
-    println(unsigned_to_string(tick_count));
+    println("LAPIC timer initialized! Tick count: %64u", tick_count);
 }
 
 void APIC_IA32_base_setup(void)
