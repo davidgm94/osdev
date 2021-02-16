@@ -24,6 +24,12 @@ add_custom_target(bl_clean COMMAND make -C ${GNU_EFI_DIR} clean)
 
 set(KERNEL_LINKER_SCRIPT ${KERNEL_DIR}/kernel.ld)
 add_executable(kernel.elf 
+    ${KERNEL_DIR}/acpi.c
+    ${KERNEL_DIR}/keyboard.c
+    ${KERNEL_DIR}/mouse.c
+    ${KERNEL_DIR}/libk.c
+    ${KERNEL_DIR}/panic.c
+    ${KERNEL_DIR}/renderer.c
     ${KERNEL_DIR}/interrupts.c
     ${KERNEL_DIR}/gdt.nasm
     ${KERNEL_DIR}/start.nasm
