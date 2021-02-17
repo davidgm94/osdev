@@ -33,3 +33,4 @@ typedef struct PACKED ACPI_SDT_Header
 } ACPI_SDT_Header;
 
 ACPI_SDT_Header* ACPI_find_table(ACPI_SDT_Header* xsdt_header, const char* signature);
+void ACPI_setup(ACPI_RSDPDescriptor2* rsdp);

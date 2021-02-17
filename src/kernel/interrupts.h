@@ -96,11 +96,7 @@ void PS2_mouse_init(void);
 bool kb_get_buffer(KeyboardBuffer* out_kb_buffer, u16* out_kb_event_count);
 char translate_scancode(u8 scancode, bool uppercase);
 
-INTERRUPT_HANDLER void page_fault_handler(struct InterruptFrame* frame);
-INTERRUPT_HANDLER void double_fault_handler(struct InterruptFrame* frame);
-INTERRUPT_HANDLER void general_protection_fault_handler(struct InterruptFrame* frame);
-INTERRUPT_HANDLER void keyboard_handler(struct InterruptFrame* frame);
-INTERRUPT_HANDLER void mouse_handler(struct InterruptFrame* frame);
-
 void interrupts_setup(void);
 void PS2_mouse_init(void);
+void GDT_setup(void);
+void APIC_setup(void);

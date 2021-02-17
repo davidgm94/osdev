@@ -31,6 +31,7 @@ add_executable(kernel.elf
     ${KERNEL_DIR}/panic.c
     ${KERNEL_DIR}/renderer.c
     ${KERNEL_DIR}/interrupts.c
+    ${KERNEL_DIR}/interrupts.nasm
     ${KERNEL_DIR}/gdt.nasm
     ${KERNEL_DIR}/start.nasm
     ${KERNEL_DIR}/kernel.c
