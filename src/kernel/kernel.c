@@ -107,33 +107,6 @@ typedef struct PageMapIndexer
     u64 P_i;
 } PageMapIndexer;
 
-typedef struct PACKED GDTDescriptor
-{
-    u16 size;
-    u64 offset;
-} GDTDescriptor;
-
-typedef struct PACKED GDTEntry
-{
-    u16 limit0;
-    u16 base0;
-    u8 base1;
-    u8 access_byte;
-    u8 limit1_flags;
-    u8 base2;
-} GDTEntry;
-
-typedef struct PACKED ALIGN(0x1000) GDT
-{
-    GDTEntry kernel_null; // 0x00
-    GDTEntry kernel_code; // 0x08
-    GDTEntry kernel_data; // 0x10
-    GDTEntry user_null;
-    GDTEntry user_code;
-    GDTEntry user_data;
-} GDT;
-
-
 typedef struct PACKED TerminalCommandBuffer
 {
     char characters[1022];
@@ -166,15 +139,6 @@ static u64 kernel_size;
 static u64 kernel_page_count;
 
 
-static ALIGN(0x1000) GDT default_GDT = 
-{
-    .kernel_null = { 0, 0, 0, 0x00, 0x00, 0 },
-    .kernel_code = { 0, 0, 0, 0x9a, 0xa0, 0 },
-    .kernel_data = { 0, 0, 0, 0x92, 0xa0, 0 },
-    .user_null =   { 0, 0, 0, 0x00, 0x00, 0 },
-    .user_code =   { 0, 0, 0, 0x9a, 0xa0, 0 },
-    .user_data =   { 0, 0, 0, 0x92, 0xa0, 0 },
-};
 
 
 
@@ -211,7 +175,6 @@ static const KernelCommand kernel_commands[] =
 };
 
 
-extern void load_gdt(GDTDescriptor* gdt_descriptor);
 
 static inline u64 abs(s64 value)
 {
@@ -600,7 +563,6 @@ void memory_setup(BootInfo boot_info)
 }
 
 void reset_terminal(void);
-void ACPI_setup(BootInfo boot_info);
 
 void kernel_init(BootInfo boot_info)
 {
@@ -616,18 +578,15 @@ void kernel_init(BootInfo boot_info)
     memory_setup(boot_info);
     fb_clear();
 
+    GDT_setup();
     interrupts_setup();
-    load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
 
 #if APIC
-    ACPI_setup(boot_info);
+    ACPI_setup(boot_info.rsdp);
     APIC_setup();
 #endif
 
-    PS2_mouse_init();
-
-    outb(PIC1_DATA, 0b11111001);
-    outb(PIC2_DATA, 0b11101111);
+    //PS2_mouse_init();
 
     println("Hello UEFI x86_64 kernel!");
     print_memory_usage();
@@ -778,7 +737,7 @@ void KernelMain(BootInfo* boot_info)
 
     while (true)
     {
-        PS2_mouse_process_packet();
+        //PS2_mouse_process_packet();
         kb_input_process();
         // This means we should process a command
         if (!allow_keyboard_input)

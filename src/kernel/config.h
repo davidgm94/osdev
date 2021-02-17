@@ -1,2 +1,2 @@
 #pragma once
-#define APIC 0
+#define APIC 1

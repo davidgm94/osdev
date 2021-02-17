@@ -5,6 +5,7 @@ extern KernelMain
 
 global _start
 _start:
+    cli
     xor rbp, rbp ; set rbp to NULL just to properly trace the stack
     call KernelMain
 

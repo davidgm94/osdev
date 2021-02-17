@@ -1,21 +1,85 @@
+#include "config.h"
 #include "interrupts.h"
 #include "asm.h"
+#include "libk.h"
+#include "panic.h"
 
-extern void panic(const char*);
-extern s32 println(const char*, ...);
-extern void print(const char*, ...);
-extern void putc(char);
 extern void clear_char(void);
 extern void* request_page(void);
 extern void memmap(void *, void *);
 
-typedef struct InterruptStack
+extern void isr0(void);
+extern void isr1(void);
+extern void isr2(void);
+extern void isr3(void);
+extern void isr4(void);
+extern void isr5(void);
+extern void isr6(void);
+extern void isr7(void);
+extern void isr8(void);
+extern void isr9(void);
+extern void isr10(void);
+extern void isr11(void);
+extern void isr12(void);
+extern void isr13(void);
+extern void isr14(void);
+extern void isr16(void);
+extern void isr17(void);
+extern void isr18(void);
+extern void isr19(void);
+extern void isr20(void);
+extern void isr30(void);
+extern void isr33(void);
+extern void isr35(void);
+extern void isr36(void);
+extern void isr37(void);
+extern void isr39(void);
+
+typedef struct PACKED InterruptStack
 {
-    u64 rax, rbx, rcx, rdx, rbp, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
-    u64 error_code, rip, cs, rflags, rsp, ss;
+    u64 r15, r14, r13, r12, r11, r10, r9, r8, rsi, rdi, rbp, rdx, rcx, rbx, rax;
+    u64 int_no, error_code;
+    u64 rip, cs, rflags, rsp, ss;
 } InterruptStack;
 
-typedef struct IDTDescriptor
+typedef struct PACKED GDTDescriptor
+{
+    u16 size;
+    u64 offset;
+} GDTDescriptor;
+
+typedef struct PACKED GDTEntry
+{
+    u16 limit0;
+    u16 base0;
+    u8 base1;
+    u8 access_byte;
+    u8 limit1_flags;
+    u8 base2;
+} GDTEntry;
+
+typedef struct PACKED ALIGN(0x1000) GDT
+{
+    GDTEntry kernel_null; // 0x00
+    GDTEntry kernel_code; // 0x08
+    GDTEntry kernel_data; // 0x10
+    GDTEntry user_null;
+    GDTEntry user_code;
+    GDTEntry user_data;
+} GDT;
+
+static ALIGN(0x1000) GDT default_GDT = 
+{
+    .kernel_null = { 0, 0, 0, 0x00, 0x00, 0 },
+    .kernel_code = { 0, 0, 0, 0x9a, 0xa0, 0 },
+    .kernel_data = { 0, 0, 0, 0x92, 0xa0, 0 },
+    .user_null =   { 0, 0, 0, 0x00, 0x00, 0 },
+    .user_code =   { 0, 0, 0, 0x9a, 0xa0, 0 },
+    .user_data =   { 0, 0, 0, 0x92, 0xa0, 0 },
+};
+extern void load_gdt(GDTDescriptor* gdt_descriptor);
+
+typedef struct PACKED IDTDescriptor
 {
     u16 offset0;
     u16 selector;
@@ -26,11 +90,11 @@ typedef struct IDTDescriptor
     u32 reserved;
 } IDTDescriptor;
 
-typedef struct PACKED IDTR
+typedef struct PACKED IDTRegister
 {
     u16 limit;
-    u64 offset;
-} IDTR;
+    u64 address;
+} IDTRegister;
 
 enum
 {
@@ -39,8 +103,13 @@ enum
     IDT_TA_TrapGate = 0b10001111,
 };
 
-typedef void InterruptHandler(InterruptStack* is, u64 error_code);
+typedef void InterruptHandler(InterruptStack* is);
 InterruptHandler* ISR[256];
+void ISR_double_fault_handler(InterruptStack* stack);
+void ISR_general_protection_fault_handler(InterruptStack* stack);
+void ISR_page_fault_handler(InterruptStack* stack);
+void ISR_keyboard_handler(InterruptStack* stack);
+void ISR_mouse_handler(InterruptStack* stack);
 
 static volatile const u64 IA32_APIC_base = 0x1b;
 u64 LAPIC_address = 0;
@@ -48,7 +117,8 @@ u64 HPET_address = 0;
 static u64 HPET_frequency = 1000000000000000;
 static u64 HPET_clk = 0;
 
-static IDTR idtr;
+static IDTRegister IDT_register;
+static IDTDescriptor* IDT_descriptors;
 
 typedef struct StackFrame
 {
@@ -76,12 +146,11 @@ void stacktrace(u32 max_frame_count)
     }
 }
 
-void stacktrace_asm(u32 max_frame_count)
+void stacktrace_asm(u64* rbp, u32 max_frame_count)
 {
-    u64* rbp;
-    asm("movq %%rbp, %0;" : "=r"(rbp) ::);
-    println("Stacktrace");
-    println("==========");
+    println("RBP %64h", rbp);
+    println("Next RBP %64h", *rbp);
+    println("Stacktrace\n==========");
     u32 i = 0;
     while (rbp)
     {
@@ -134,22 +203,26 @@ static inline void KeyboardBitmap_set_value(KeyboardBitmap* keymap, u64 index, b
     /*loop_forever();*/
 }
 
-INTERRUPT_HANDLER void page_fault_handler(struct InterruptFrame* frame)
+void ISR_page_fault_handler(struct InterruptStack* stack)
 {
     panic("Page fault detected");
     for(;;);
 }
 
-INTERRUPT_HANDLER void double_fault_handler(struct InterruptFrame* frame)
+void ISR_double_fault_handler(struct InterruptStack* stack)
 {
     panic("Double fault detected");
     for(;;);
 }
 
-INTERRUPT_HANDLER void general_protection_fault_handler(struct InterruptFrame* frame)
+void ISR_general_protection_fault_handler(struct InterruptStack* stack)
 {
-    panic("General protection fault detected");
-    stacktrace_asm(10);
+    panic("General protection fault detected. Interrupt number: %64u. Error code: %64u\n", stack->int_no, stack->error_code);
+    u64* rbp;
+    asm("movq %%rbp, %0;" : "=r"(rbp) ::);
+    stacktrace_asm(rbp, 10);
+    stacktrace_asm((u64*)stack->rbp, 10);
+    
     for(;;);
 }
 
@@ -170,7 +243,7 @@ bool kb_get_buffer(KeyboardBuffer* out_kb_buffer, u16* out_kb_event_count)
     return overflow;
 }
 
-INTERRUPT_HANDLER void keyboard_handler(struct InterruptFrame* frame)
+void ISR_keyboard_handler(struct InterruptStack* stack)
 {
     u8 scancode = inb(PS2_KEYBOARD_PORT);
 
@@ -217,7 +290,7 @@ void PS2_mouse_handle(u8 data)
     }
 }
 
-INTERRUPT_HANDLER void mouse_handler(struct InterruptFrame* frame)
+void ISR_mouse_handler(struct InterruptStack* stack)
 {
     u8 mouse_data = inb(0x60);
 
@@ -261,6 +334,12 @@ void PIC_end_slave(void)
 {
     outb(PIC2_COMMAND, PIC_EOI);
     outb(PIC1_COMMAND, PIC_EOI);
+}
+
+void PIC_mask(void)
+{
+    outb(PIC1_DATA, 0xf9);
+    outb(PIC2_DATA, 0xff);
 }
 
 void PIC_remap(void)
@@ -483,48 +562,62 @@ void PS2_mouse_init(void)
     PS2_mouse_read();
 }
 
-void IDTDescriptor_set_offset(IDTDescriptor* d, u64 offset)
+enum
 {
-    d->offset0 = (u16) (offset & 0x000000000000ffff);
-    d->offset1 = (u16)((offset & 0x00000000ffff0000) >> 16);
-    d->offset2 = (u32)((offset & 0xffffffff00000000) >> 32);
-}
+    IDT_TypePrivilege = 0,
+    IDT_TypePresent = 1,
+};
 
-u64 IDTDescriptor_get_offset(IDTDescriptor d)
+void IDT_gate_new(u8 index, u8 gate, void (*handler)(void))
 {
-    u64 offset = (u64)d.offset0 | ((u64)d.offset1 << 16) | ((u64)d.offset2 << 32);
-    return offset;
-}
-
-void IDT_gate_new(void* handler, u8 entry_offset, u8 type_attribute, u8 selector)
-{
-    IDTDescriptor* i = (IDTDescriptor*)(idtr.offset + entry_offset * sizeof(IDTDescriptor));
-    IDTDescriptor_set_offset(i, (u64)handler);
-    i->type_attribute = type_attribute;
-    i->selector = selector;
+    IDT_descriptors[index] = (const IDTDescriptor)
+    {
+        .offset0 = (u16)((u64)handler & 0x000000000000ffff),
+        .selector = 1 * sizeof(GDTEntry),
+        .ist = 0,
+        .type_attribute = IDT_TypePresent << 7 | IDT_TypePrivilege << 5 | gate,
+        .offset1 = (u16)(((u64)handler & 0x00000000ffff0000) >> 16),
+        .offset2 = (u32)(((u64)handler & 0xffffffff00000000) >> 32),
+        .reserved = 0,
+    };
 }
 
 void IDT_load(void)
 {
-    asm("lidt %0" : : "m" (idtr));
+    asm("lidt %0" : : "m" (IDT_register));
+}
+
+void GDT_setup(void)
+{
+    load_gdt(&(GDTDescriptor) { .size = sizeof(GDT) - 1, .offset = (u64)&default_GDT, });
 }
 
 void interrupts_setup(void)
 {
-    idtr.limit = 0x0FFF;
-    idtr.offset = (u64)request_page();
+    usize IDT_size = 256 * sizeof(IDTDescriptor);
+    IDT_register.limit = IDT_size - 1;
+    IDT_register.address = (u64)request_page();
+    IDT_descriptors = (IDTDescriptor*)IDT_register.address;
+    memset(IDT_descriptors, 0, IDT_size);
 
-    IDT_gate_new(page_fault_handler, 0xE, IDT_TA_InterruptGate, 0x08);
-    IDT_gate_new(double_fault_handler, 0x8, IDT_TA_InterruptGate, 0x08);
-    IDT_gate_new(general_protection_fault_handler, 0xD, IDT_TA_InterruptGate, 0x08);
-    IDT_gate_new(keyboard_handler, 0x21, IDT_TA_InterruptGate, 0x08);
-    IDT_gate_new(mouse_handler, 0x2C, IDT_TA_InterruptGate, 0x08);
+    IDT_gate_new(8,  IDT_TA_TrapGate, isr8); // double fault
+    IDT_gate_new(13, IDT_TA_TrapGate, isr13); // GP fault
+    IDT_gate_new(14, IDT_TA_TrapGate, isr14); // page fault
+    IDT_gate_new(33, IDT_TA_InterruptGate, isr33); // keyboard interrupt
+    //IDT_gate_new(44, IDT_TA_InterruptGate, isr44); // mouse interrupt
 
-    IDT_load();
+    ISR[8] = ISR_double_fault_handler;
+    ISR[13] = ISR_general_protection_fault_handler;
+    ISR[14] = ISR_page_fault_handler;
+    ISR[33] = ISR_keyboard_handler;
+    //ISR[44] = ISR_mouse_handler;
+
 #if APIC == 0
     PIC_remap();
-    interrupts_enable();
+    PIC_mask();
 #endif
+    IDT_load();
+    interrupts_enable();
 }
 
 void PIC_mask_IRQ(u8 IRQ)
@@ -800,7 +893,7 @@ void LAPIC_timer_setup(void)
 
     LAPIC_write(LVT_TimerRegister, 32 | APIC_LVT_TIMER_MODE_PERIODIC);
     LAPIC_write(DivideConfigurationRegisterForTimer, 0x3);
-    LAPIC_write(InitialCountRegisterForTimer, ticks_per_ms);
+    //LAPIC_write(InitialCountRegisterForTimer, ticks_per_ms);
 
     println("LAPIC timer initialized! Tick count: %64u", tick_count);
 }
